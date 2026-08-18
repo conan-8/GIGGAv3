@@ -117,7 +117,7 @@ test("CLI status reads per-project state", async () => {
   await mkdir(proj, { recursive: true })
   const stateFile = projectStatePath(proj, root)
   await mkdir(dirname(stateFile), { recursive: true })
-  await writeFile(stateFile, JSON.stringify({ phase: "executing", agents: [{ kind: "worker", id: 1, status: "working" }] }))
+  await writeFile(stateFile, JSON.stringify({ phase: "executing", updatedAt: new Date().toISOString(), agents: [{ kind: "worker", id: 1, status: "working" }] }))
   const { stdout } = await run(process.execPath, [SHARED, "status", proj, root])
   const out = JSON.parse(stdout)
   assert.equal(out.ok, true)
