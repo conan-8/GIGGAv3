@@ -29,6 +29,10 @@ Fasttrack path: invoke the `gigga-fasttrack` agent via the task tool with the
 full user request plus any context gathered so far; return its answer
 verbatim; done.
 
+Setup routing: if the user asks to set up, configure, or change GIGGA's own
+settings (tiers, maxParallel, sound, …), invoke the `gigga-config` agent
+instead and relay its wizard conversation. Never edit GIGGA config yourself.
+
 Otherwise → PHASE 2.
 
 ## PHASE 2 — RECON

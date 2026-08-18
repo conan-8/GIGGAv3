@@ -20,8 +20,16 @@ SB="$(mktemp -d /tmp/gigga-e2e.XXXXXX)"
 H="$SB/home"
 FX="$SB/fixture"
 SSE="$SB/sse.log"
-STATE="$H/.config/opencode/gigga/state.json"
-GLOG="$H/.config/opencode/gigga/events.log"
+state_file() {  # per-project state.json (session-4 layout)
+  python3 -c '
+import hashlib, os, sys
+d, root = sys.argv[1], sys.argv[2]
+slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in os.path.basename(d))[:40] or "project"
+h = hashlib.sha256(d.encode()).hexdigest()[:10]
+print(os.path.join(root, "gigga", "projects", f"{slug}-{h}", "state.json"))
+' "$FX" "$H/.config/opencode"
+}
+GLOG_HINT="(per-project events.log lives next to state.json)"
 MAXCONC=0
 
 md() { printf '%s\n' "$*"; }
@@ -182,9 +190,9 @@ run_and_watch() {
   local sid="$1" t="$2" mode="$3" snap="${4:-}" waited=0 r C
   while [ "$waited" -lt "$t" ]; do
     if [ "$mode" != "none" ]; then r=$(reply_question "$sid" "$mode") && echo "$r"; fi
-    if [ -n "$snap" ] && [ ! -s "$snap" ] && grep -q '"phase": *"executing"' "$STATE" 2>/dev/null \
-       && grep -q '"kind": *"worker"' "$STATE" 2>/dev/null && grep -q '"status": *"working"' "$STATE" 2>/dev/null; then
-      cp "$STATE" "$snap"
+    if [ -n "$snap" ] && [ ! -s "$snap" ] && grep -q '"phase": *"executing"' "$(state_file)" 2>/dev/null \
+       && grep -q '"kind": *"worker"' "$(state_file)" 2>/dev/null && grep -q '"status": *"working"' "$(state_file)" 2>/dev/null; then
+      cp "$(state_file)" "$snap"
     fi
     if [ "${GIGGA_WATCH_CONC:-0}" = "1" ]; then
       C=$(python3 -c '
@@ -192,7 +200,7 @@ import json
 try: s = json.load(open(sys.argv[1]))
 except Exception: raise SystemExit
 print(sum(1 for a in s.get("agents", []) if a.get("kind") == "worker" and a.get("status") == "working"))
-' "$STATE" 2>/dev/null || echo 0)
+' "$(state_file)" 2>/dev/null || echo 0)
       case "$C" in ''|*[!0-9]*) C=0;; esac
       [ "$C" -gt "$MAXCONC" ] && MAXCONC=$C
     fi
@@ -319,7 +327,7 @@ print(overlap)
 ' "$1"
 }
 
-state_snap() { echo "--- state.json @ $(date -u +%H:%M:%S) ---"; cat "$STATE" 2>/dev/null || echo "(missing)"; }
+state_snap() { echo "--- state.json @ $(date -u +%H:%M:%S) ---"; cat "$(state_file)" 2>/dev/null || echo "(missing)"; }
 fx_diff() { git -C "$FX" diff --stat 2>/dev/null | tail -6; }
 
 # ============================================================== SCENARIO A ==
@@ -366,7 +374,7 @@ if [ "$(checker_verdicts | tail -1)" = "PASS" ]; then md "**B: PASS** — checke
 md ""
 md "## Scenario E — bell + toast on pending question (observed during B)"
 md "plugin log (question/bell/toast lines):"
-code "$(grep -E 'question|bell|toast' "$GLOG" | tail -10)"
+code "$(grep -aE 'question|bell|toast' "$(dirname "$(state_file)")/events.log" 2>/dev/null | tail -10)"
 md "tui.toast.show events on the bus:"
 code "$(sse_json | python3 -c '
 import json, sys
