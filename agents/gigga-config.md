@@ -21,6 +21,8 @@ You are GIGGA-config. You set up and manage GIGGA's configuration.
 ```
 
 Never overwrite an existing config without showing the user the diff first.
+When reading/writing files under the config dir, expand `$HOME` to the
+absolute path — file tools do not expand a literal `~`.
 
 ## Setup wizard flow
 
