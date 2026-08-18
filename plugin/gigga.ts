@@ -1,35 +1,49 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { basename, dirname, join } from "node:path"
+import { createHash } from "node:crypto"
 
 /**
- * GIGGA plugin — orchestration state tracker (session 2).
+ * GIGGA plugin — orchestration state tracker (session 4).
  *
- * Maintains ~/.config/opencode/gigga/state.json from opencode bus events and
- * signals pending questions (bell + toast).
+ * Maintains PER-PROJECT state under
+ *   <cfgRoot>/gigga/projects/<slug>-<hash10>/state.json
+ * (cfgRoot = GIGGA_HOME or ~/.config/opencode; slug+hash derive from the
+ * project/worktree dir — see projectStatePath, mirrored in
+ * dashboard/lib/shared.mjs with a conformance test).
  *
- * Design notes (verified on opencode 1.18.18 — see DEVIATIONS.md):
- * - opencode may instantiate this plugin MORE THAN ONCE (we observed two
- *   concurrent instances → duplicated state entries and toasts). All state
- *   therefore lives in state.json on disk: every event handler re-reads,
- *   mutates, and atomically writes (tmp + rename). A mutation returns
- *   `true` only for the instance whose change actually landed, so side
- *   effects (bell/toast) fire exactly once.
- * - Event shapes: question.asked/replied/rejected; message.part.updated
- *   with part.tool === "task" (state.input.subagent_type on running,
- *   <task id="ses_…"> inside state.output on completion); message.updated
- *   with info.role/info.agent; session.created with info.parentID;
- *   session.idle / session.error.
- * - Every handler is wrapped: a plugin error must never crash opencode.
+ * Also: server discovery (server.json), stale-run recovery on load,
+ * pending-question signaling (bell + toast), phase-transition toasts, and a
+ * question-round cap enforced via tool.execute.before (args mutation).
+ *
+ * Verified behaviors (opencode 1.18.18 — DEVIATIONS.md):
+ * - the plugin may be instantiated more than once → all state on disk,
+ *   atomic tmp+rename per instance, mkdir-lock serialization;
+ * - question.asked/replied, task tool part updates, session.idle/error shapes;
+ * - permission.ask hook does NOT fire for the question tool → the cap is
+ *   enforced by emptying the question args at the (cap+1)-th call.
+ * - every handler wrapped: plugin errors never crash opencode.
  */
+
+export function projectStatePath(projectDir: string, cfgRoot: string): string {
+  const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
+  const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
+  return join(cfgRoot, "gigga", "projects", `${slug}-${hash}`, "state.json")
+}
 
 const CFG_ROOT = process.env.GIGGA_HOME ?? join(process.env.HOME ?? "~", ".config", "opencode")
 const GIGGA_DIR = join(CFG_ROOT, "gigga")
-const STATE_FILE = join(GIGGA_DIR, "state.json")
-const STATE_TMP = join(GIGGA_DIR, "state.json.tmp")
-const EVENTS_LOG = join(GIGGA_DIR, "events.log")
 const CONFIG_FILE = join(GIGGA_DIR, "gigga.config.json")
+const SERVER_FILE = join(GIGGA_DIR, "server.json")
+const STALE_AFTER_MS = 120_000
+
+// per-project paths — set at plugin init
+let STATE_FILE = join(GIGGA_DIR, "state.json")
+let STATE_TMP = `${STATE_FILE}.tmp`
+let STATE_DIR = GIGGA_DIR
+let EVENTS_LOG = join(GIGGA_DIR, "events.log")
+let LOCK_DIR = join(GIGGA_DIR, ".lock")
 
 type Phase =
   | "idle"
@@ -59,12 +73,13 @@ interface RunState {
   originalRequest: string
   agents: AgentEntry[]
   updatedAt: string
-  // bookkeeping (not part of the public shape)
   orchestrator: string | null
   workerCounter: number
-  taskCalls: Record<string, { entryIndex: number; asked: boolean }> // callID -> agent entry
+  taskCalls: Record<string, { entryIndex: number; asked: boolean }>
   sessions: Record<string, { agent?: string; parent?: string; firstUserText?: string }>
-  answeredQuestions: Record<string, boolean> // requestID -> handled
+  answeredQuestions: Record<string, boolean>
+  questionCalls: Record<string, number>
+  retries: number
 }
 
 const freshState = (): RunState => ({
@@ -78,30 +93,30 @@ const freshState = (): RunState => ({
   taskCalls: {},
   sessions: {},
   answeredQuestions: {},
+  questionCalls: {},
+  retries: 0,
 })
 
 let serverUrl: URL | null = null
 
 async function log(line: string) {
   try {
-    await mkdir(GIGGA_DIR, { recursive: true })
+    await mkdir(STATE_DIR, { recursive: true })
     await appendFile(EVENTS_LOG, `${new Date().toISOString()} ${line}\n`)
   } catch {}
 }
 
-function soundEnabled(): boolean {
+function readConfig(): any {
   try {
-    const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"))
-    return cfg.sound !== false
+    return JSON.parse(readFileSync(CONFIG_FILE, "utf8"))
   } catch {
-    return true
+    return {}
   }
 }
 
 async function readState(): Promise<RunState> {
   try {
     const raw = JSON.parse(await readFile(STATE_FILE, "utf8"))
-    // tolerate files from an older/newer shape
     return { ...freshState(), ...raw }
   } catch {
     return freshState()
@@ -110,7 +125,7 @@ async function readState(): Promise<RunState> {
 
 async function writeState(s: RunState) {
   s.updatedAt = new Date().toISOString()
-  await mkdir(GIGGA_DIR, { recursive: true })
+  await mkdir(STATE_DIR, { recursive: true })
   const pub = {
     phase: s.phase,
     pendingQuestion: s.pendingQuestion,
@@ -118,20 +133,23 @@ async function writeState(s: RunState) {
     agents: s.agents,
     updatedAt: s.updatedAt,
   }
-  const full = { ...pub, orchestrator: s.orchestrator, workerCounter: s.workerCounter, taskCalls: s.taskCalls, sessions: s.sessions, answeredQuestions: s.answeredQuestions }
-  // unique tmp per write: concurrent plugin instances never rename each
-  // other's tmp file away (shared tmp caused ENOENT rename races)
+  const full = {
+    ...pub,
+    orchestrator: s.orchestrator,
+    workerCounter: s.workerCounter,
+    taskCalls: s.taskCalls,
+    sessions: s.sessions,
+    answeredQuestions: s.answeredQuestions,
+    questionCalls: s.questionCalls,
+    retries: s.retries,
+  }
   const tmp = `${STATE_TMP}.${process.pid}.${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   await writeFile(tmp, JSON.stringify(full, null, 2) + "\n")
-  await rename(tmp, STATE_FILE) // atomic on POSIX
+  await rename(tmp, STATE_FILE)
 }
 
-// Cross-instance lock: mkdir is atomic, so concurrent plugin instances
-// serialize their read-modify-write cycles. A stale lock (holder crashed)
-// is stolen after 5s.
-const LOCK_DIR = join(GIGGA_DIR, ".lock")
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  await mkdir(GIGGA_DIR, { recursive: true })
+  await mkdir(STATE_DIR, { recursive: true })
   for (let i = 0; ; i++) {
     try {
       await mkdir(LOCK_DIR)
@@ -141,13 +159,13 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
       try {
         age = Date.now() - (await stat(LOCK_DIR)).mtimeMs
       } catch {
-        break // lock vanished between mkdir and stat — retry immediately
+        break
       }
       if (age > 5000) {
         await rm(LOCK_DIR, { recursive: true, force: true }).catch(() => {})
         continue
       }
-      if (i > 200) return fn() // ~2s: proceed unlocked rather than hang
+      if (i > 200) return fn()
       await new Promise((r) => setTimeout(r, 10))
     }
   }
@@ -158,9 +176,6 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// Read-modify-write under the lock. `mutate` returns true if it changed
-// anything; the caller proceeds with side effects only when this instance's
-// change landed.
 async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
   return withLock(async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -182,7 +197,7 @@ async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
 }
 
 async function bell() {
-  if (!soundEnabled()) {
+  if (readConfig().sound === false) {
     await log("bell: skipped (config sound=false)")
     return
   }
@@ -200,7 +215,7 @@ async function toast(message: string, variant: "info" | "warning" | "error" | "s
     const res = await fetch(new URL("tui/show-toast", serverUrl), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, variant, title: "GIGGA", duration: 8000 }),
+      body: JSON.stringify({ message, variant, title: "GIGGA", duration: 6000 }),
     })
     if (!res.ok) await log(`toast: HTTP ${res.status}`)
   } catch (e) {
@@ -226,19 +241,79 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
   return false
 }
 
+// ------------------------------------------------------------- recovery ----
+async function recoverStale() {
+  const acted = await update((s) => {
+    const age = Date.now() - Date.parse(s.updatedAt || "0")
+    if (!isFinite(age) || age < STALE_AFTER_MS) return false
+    let changed = false
+    for (const a of s.agents) {
+      if (a.status === "working") {
+        a.status = "failed"
+        a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
+        changed = true
+      }
+    }
+    if (changed) {
+      s.phase = "failed"
+      s.pendingQuestion = false
+    }
+    return changed
+  })
+  if (acted) await log("recovered stale run: working agents marked failed (interrupted)")
+}
+
+// ------------------------------------------------------- phase toasts ------
+let lastAnnouncedPhase: string | null = null
+async function announcePhase(s: RunState) {
+  if (s.phase === lastAnnouncedPhase) return
+  const prev = lastAnnouncedPhase
+  lastAnnouncedPhase = s.phase
+  const workers = s.agents.filter((a) => a.kind === "worker")
+  switch (s.phase) {
+    case "plan":
+      if (prev) await toast("GIGGA: planning…", "info")
+      break
+    case "executing": {
+      const running = workers.filter((w) => w.status === "working").length
+      const mp = Number(readConfig().maxParallel ?? 5)
+      const free = Math.max(0, mp - running)
+      await toast(`GIGGA: ${running} worker${running === 1 ? "" : "s"} running (${free} parallel slot${free === 1 ? "" : "s"} free)`, "info")
+      break
+    }
+    case "checking":
+      await toast("GIGGA: checking…", "info")
+      break
+    case "done":
+      await toast("GIGGA: done", "success")
+      break
+    case "failed":
+      await toast("GIGGA: failed / needs retry", "error")
+      break
+  }
+}
+
 // ---------------------------------------------------------------- plugin ---
 export const GiggaPlugin: Plugin = async (input) => {
   serverUrl = input.serverUrl ?? null
-  await log(`plugin loaded (directory=${input.directory})`)
-  // server discovery for the dashboard: record where opencode is listening
+  const projectDir = input.worktree || input.directory
+  STATE_FILE = projectStatePath(projectDir, CFG_ROOT)
+  STATE_DIR = dirname(STATE_FILE)
+  STATE_TMP = `${STATE_FILE}.tmp`
+  EVENTS_LOG = join(STATE_DIR, "events.log")
+  LOCK_DIR = join(STATE_DIR, ".lock")
+  await log(`plugin loaded (directory=${input.directory}, project=${projectDir})`)
+
+  // server discovery for the dashboard
   try {
     await mkdir(GIGGA_DIR, { recursive: true })
     await writeFile(
-      join(GIGGA_DIR, "server.json"),
+      SERVER_FILE,
       JSON.stringify(
         {
           url: serverUrl?.href ?? null,
           directory: input.directory,
+          worktree: input.worktree ?? null,
           pid: process.pid,
           updatedAt: new Date().toISOString(),
         },
@@ -248,12 +323,38 @@ export const GiggaPlugin: Plugin = async (input) => {
     )
   } catch {}
 
+  // migrate legacy global state (sessions ≤3): rename it aside, never read
+  try {
+    const legacy = join(GIGGA_DIR, "state.json")
+    await stat(legacy)
+    await rename(legacy, `${legacy}.legacy-${Date.now()}`)
+    await log("migrated legacy global state.json (renamed aside)")
+  } catch {}
+
+  await recoverStale()
+
   return {
     async event(input) {
       try {
         await handleEvent(input.event)
       } catch (e) {
         await log(`event handler error (${input.event?.type}): ${String(e)}`)
+      }
+    },
+    "tool.execute.before": async (input, output) => {
+      try {
+        if (input.tool !== "question") return
+        const cap = Number(readConfig().questionRounds ?? 2)
+        const s = await readState()
+        if (!isGiggaSession(s, input.sessionID)) return
+        const calls = s.questionCalls[input.sessionID] ?? 0
+        if (calls >= cap + 1) {
+          output.args = { ...(output.args ?? {}), questions: [] }
+          await log(`question cap enforced (session ${input.sessionID}: ${calls} calls ≥ cap ${cap}) — question emptied`)
+          await toast("GIGGA: question round cap reached — proceeding with assumptions", "warning")
+        }
+      } catch (e) {
+        await log(`tool.execute.before error: ${String(e)}`)
       }
     },
   }
@@ -272,7 +373,6 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         if (info.parentID) next.parent = info.parentID
         if (JSON.stringify(cur) === JSON.stringify(next)) return false
         s.sessions[info.id] = next
-        // a gigga subagent session whose parent we track → fill its entry early
         if (next.agent?.startsWith("gigga") && next.parent) {
           const entry = s.agents.find(
             (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
@@ -317,8 +417,9 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       const rid = p.id as string
       const acted = await update((s) => {
         if (!isGiggaSession(s, p.sessionID)) return false
-        if (s.answeredQuestions[rid]) return false // another instance already handled it
+        if (s.answeredQuestions[rid]) return false
         s.answeredQuestions[rid] = true
+        s.questionCalls[p.sessionID] = (s.questionCalls[p.sessionID] ?? 0) + 1
         s.pendingQuestion = true
         if (["idle", "recon", "plan"].includes(s.phase)) s.phase = "questions"
         return true
@@ -346,12 +447,13 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       const part = p.part
       if (part?.type !== "tool") return
       if (part.tool === "todowrite") {
-        await update((s) => {
+        const acted = await update((s) => {
           if (p.sessionID !== s.orchestrator) return false
           if (!["recon", "questions", "idle"].includes(s.phase)) return false
           s.phase = "plan"
           return true
         })
+        if (acted) await announcePhase(s)
         return
       }
       if (part.tool !== "task") return
@@ -364,9 +466,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
 
       if (st.status === "running") {
         const acted = await update((s) => {
-          if (s.taskCalls[callID]) return false // already tracked (by any instance)
-          // idempotent even from a stale read: same parent+kind+task already
-          // present means another instance's write landed first
+          if (s.taskCalls[callID]) return false
           const task = String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200)
           const dup = s.agents.some(
             (a) =>
@@ -380,7 +480,6 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           }
           const parent = p.sessionID
           if (s.orchestrator !== parent) {
-            // a new parent session spawning gigga tasks starts a new run
             const fresh = freshState()
             Object.assign(s, fresh)
             s.orchestrator = parent
@@ -410,7 +509,10 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           else if (cls.kind === "checker") s.phase = "checking"
           return true
         })
-        if (acted) await log(`task running [${callID}] ${subagentType} "${String(st.input?.description ?? "").slice(0, 60)}"`)
+        if (acted) {
+          await log(`task running [${callID}] ${subagentType} "${String(st.input?.description ?? "").slice(0, 60)}"`)
+          await announcePhase(await readState())
+        }
         return
       }
 
@@ -445,7 +547,10 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         entry.status = "done"
         return true
       })
-      if (acted) await log(`session.idle ${sid}`)
+      if (acted) {
+        await log(`session.idle ${sid}`)
+        if (sid === (await readState()).orchestrator) await announcePhase(await readState())
+      }
       return
     }
 
@@ -456,7 +561,10 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         s.phase = "failed"
         return true
       })
-      if (acted) await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
+      if (acted) {
+        await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
+        await announcePhase(await readState())
+      }
       return
     }
   }

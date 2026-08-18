@@ -155,3 +155,5 @@ kbd { background: var(--panel2); border: 1px solid #333; border-radius: 4px; pad
   #red-ring { animation: none; }
   .bar-fill { transition: none; }
 }
+
+.cheat-sheet { color: var(--dim); font-size: 11px; white-space: pre-wrap; border-left: 2px solid var(--accent); padding-left: 10px; margin-top: 8px; }

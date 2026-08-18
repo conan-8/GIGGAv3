@@ -4,10 +4,62 @@
 //
 // Zero dependencies, runs under node >= 20 and bun.
 
-import { readFile, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { readFile, writeFile, mkdir, rename, stat } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { basename, dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 export const TIERS = ["low", "medium", "high"]
+
+// ------------------------------------------------------ per-project state --
+// MUST stay in sync with projectStatePath in plugin/gigga.ts — a conformance
+// test (dashboard/test/parity.test.mjs) imports both and asserts equality.
+export function projectStatePath(projectDir, cfgRoot) {
+  const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
+  const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
+  return join(cfgRoot, "gigga", "projects", `${slug}-${hash}`, "state.json")
+}
+
+// If state says agents are "working" but nothing has updated it for
+// STALE_AFTER_MS, they were interrupted (e.g. opencode killed) — mark failed.
+export const STALE_AFTER_MS = 120_000
+
+export async function recoverStaleState(state, now = Date.now()) {
+  if (!state || !Array.isArray(state.agents)) return { state, changed: false }
+  const age = now - Date.parse(state.updatedAt || "0")
+  if (!isFinite(age) || age < STALE_AFTER_MS) return { state, changed: false }
+  let changed = false
+  for (const a of state.agents) {
+    if (a.status === "working") {
+      a.status = "failed"
+      a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
+      changed = true
+    }
+  }
+  if (changed) {
+    state.phase = "failed"
+    state.pendingQuestion = false
+  }
+  return { state, changed }
+}
+
+export async function readProjectState(projectDir, cfgRoot) {
+  const file = projectStatePath(projectDir, cfgRoot)
+  let state = null
+  try {
+    state = JSON.parse(await readFile(file, "utf8"))
+  } catch {
+    return null
+  }
+  const r = await recoverStaleState(state)
+  if (r.changed) {
+    try {
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, JSON.stringify(r.state, null, 2) + "\n")
+    } catch {}
+  }
+  return r.state
+}
 
 // ------------------------------------------------------------- config ------
 // validateConfig(cfg, availableModels?) -> { ok, errors: string[] }
@@ -169,4 +221,63 @@ export function mergeStateView(state, extras = {}) {
 export function hasGiggaRun(state) {
   if (!state || !Array.isArray(state.agents)) return false
   return state.agents.length > 0
+}
+
+export const CHEAT_SHEET = [
+  "HOW GIGGA WORKS",
+  "1. Simple ask? Fast-tracked: one agent, straight answer.",
+  "2. Bigger jobs: read-only recon inspects the repo, asks ≤ N question rounds, then states assumptions.",
+  "3. A numbered worker team executes the plan in parallel (low/medium/high tier models).",
+  "4. A read-only checker verifies against your original request; gaps get a retry pass.",
+]
+
+// ------------------------------------------------------------------ CLI ----
+// Shared tooling used by BOTH the dashboard server and the gigga-config
+// agent (the agent shells out to these — one implementation, no forks):
+//   node shared.mjs validate <config.json> [modelsFile]
+//   node shared.mjs apply     <agentsDir> <config.json>
+//   node shared.mjs models
+//   node shared.mjs status    <projectDir> [cfgRoot]
+//   node shared.mjs wizard    <cfgRoot> <json>   (write config + apply + mark configured)
+if (process.argv[1] && process.argv[1].endsWith("shared.mjs") && process.argv.length > 2) {
+  const [, , cmd, ...rest] = process.argv
+  const out = (o) => console.log(JSON.stringify(o, null, 2))
+  try {
+    if (cmd === "validate") {
+      const cfg = JSON.parse(await readFile(rest[0], "utf8"))
+      let models
+      if (rest[1]) models = (await readFile(rest[1], "utf8")).split("\n").map((l) => l.trim()).filter(Boolean)
+      out(validateConfig(cfg, models))
+    } else if (cmd === "apply") {
+      const cfg = JSON.parse(await readFile(rest[1], "utf8"))
+      out({ ok: true, agentUpdates: await applyTierModels(rest[0], cfg.tiers, cfg.defaultTier) })
+    } else if (cmd === "models") {
+      const models = await listModels({})
+      out({ ok: true, models })
+    } else if (cmd === "status") {
+      const cfgRoot = rest[1] ?? process.env.GIGGA_HOME ?? join(process.env.HOME, ".config", "opencode")
+      const state = await readProjectState(rest[0], cfgRoot)
+      out({ ok: true, state })
+    } else if (cmd === "wizard") {
+      // rest: cfgRoot, configJson (validated, models already checked by caller)
+      const cfgRoot = rest[0]
+      const cfg = JSON.parse(rest[1])
+      const v = validateConfig(cfg)
+      if (!v.ok) { out({ ok: false, errors: v.errors }); process.exit(1) }
+      cfg.configured = true
+      const giggaDir = join(cfgRoot, "gigga")
+      await mkdir(giggaDir, { recursive: true })
+      const cfgFile = join(giggaDir, "gigga.config.json")
+      try { await stat(cfgFile); await rename(cfgFile, `${cfgFile}.backup-${Date.now()}`) } catch {}
+      await writeFile(cfgFile, JSON.stringify(cfg, null, 2) + "\n")
+      const agentUpdates = await applyTierModels(join(cfgRoot, "agents"), cfg.tiers, cfg.defaultTier)
+      out({ ok: true, configFile: cfgFile, agentUpdates, cheatSheet: CHEAT_SHEET })
+    } else {
+      out({ ok: false, errors: [`unknown command: ${cmd}`] })
+      process.exit(1)
+    }
+  } catch (e) {
+    out({ ok: false, errors: [String(e)] })
+    process.exit(1)
+  }
 }

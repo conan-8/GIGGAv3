@@ -63,6 +63,8 @@ async function fetchState() {
     const d = await r.json()
     current.server = d.server
     current.configExists = d.configExists
+    current.configured = d.configured
+    current.project = d.project
     applyState(d.state)
   } catch (e) {
     $("#server-note").textContent = `state fetch failed: ${e}`
@@ -73,7 +75,7 @@ function applyState(state) {
   const prevPending = current.state?.pendingQuestion
   // skip DOM churn when neither the state nor the selection changed — the
   // periodic fetch would otherwise rebuild boxes mid-click
-  const sig = JSON.stringify({ s: state, k: activeAgentKey, h: location.hash, ce: current.configExists, r: current.server?.reachable })
+  const sig = JSON.stringify({ s: state, k: activeAgentKey, h: location.hash, ce: current.configExists, cf: current.configured, r: current.server?.reachable })
   if (sig === lastRenderSig) return
   lastRenderSig = sig
   current.state = state
@@ -142,7 +144,7 @@ function applyState(state) {
 
   // views
   const hasRun = agents.length > 0
-  const showConfig = location.hash === "#config" || (!current.configExists && !hasRun)
+  const showConfig = location.hash === "#config" || (!current.configured && !hasRun)
   $("#config-view").hidden = !showConfig
   if (showConfig) {
     $("#empty-state").hidden = true
@@ -158,9 +160,10 @@ function applyState(state) {
 
   // server note
   const s = current.server
+  const proj = current.project ? `project: ${current.project} · ` : ""
   $("#server-note").textContent = s?.reachable
-    ? `opencode server: ${s.url}`
-    : "opencode server unreachable — status-only mode (state file + disk)"
+    ? `${proj}opencode server: ${s.url}`
+    : `${proj}opencode server unreachable — status-only mode (state file + disk)"
 }
 
 function escapeHtml(s) {
@@ -293,7 +296,14 @@ $("#config-form").addEventListener("submit", async (ev) => {
       msg.className = "ok"
       msg.textContent = "saved ✓ (agent model lines updated; restart opencode sessions to apply)"
       current.configExists = true
+      current.configured = true
       current.configSound = body.sound
+      const cs = document.createElement("pre")
+      cs.className = "cheat-sheet"
+      cs.textContent = (d.cheatSheet ?? []).join("\n")
+      const old = $("#config-form").querySelector(".cheat-sheet")
+      if (old) old.remove()
+      $("#config-form").appendChild(cs)
     } else {
       msg.className = "err"
       msg.textContent = (d.errors ?? ["unknown error"]).join("; ")

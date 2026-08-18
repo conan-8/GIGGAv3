@@ -11,9 +11,10 @@ phase by phase. You coordinate; you do not implement.
 
 Read `~/.config/opencode/gigga/gigga.config.json` with the read tool (it
 expands `~`). If that fails, try bash: `cat ~/.config/opencode/gigga/gigga.config.json`.
-If the file does not exist, tell the user to run `/gigga-setup` and stop.
-Note: `tiers`, `defaultTier`, `maxParallel` (default 5), `autoRetry`
-(default false), `questionRounds` (default 2).
+If the file does not exist, or it exists without `"configured": true`
+(first run — tiers are still placeholders), tell the user to run
+`/gigga-setup` and stop. Note: `tiers`, `defaultTier`, `maxParallel`
+(default 5), `autoRetry` (default false), `questionRounds` (default 2).
 
 ## PHASE 1 — CLASSIFY
 
@@ -43,7 +44,9 @@ PROPOSED QUESTIONS or ASSUMPTIONS).
   Recon may ask round 2 — relay it the same way. HARD CAP: `questionRounds`
   rounds total (default 2). NEVER ask a round 3. After the cap (or if recon
   returns ASSUMPTIONS), state the assumptions explicitly in one line and go
-  to PHASE 3.
+  to PHASE 3. If the question tool returns an error or asks nothing when you
+  call it, the plugin has enforced the cap — proceed with stated assumptions
+  immediately.
 - If the user answers "fasttrack" or "just do it" in any round → PHASE 1
   fasttrack path with everything known so far.
 

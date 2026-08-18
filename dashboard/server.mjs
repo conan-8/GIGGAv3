@@ -23,13 +23,19 @@ import { dirname } from "node:path"
 import os from "node:os"
 import { execFileSync } from "node:child_process"
 
-import { validateConfig, defaultConfig, applyTierModels, listModels, mergeStateView, hasGiggaRun } from "./lib/shared.mjs"
+import {
+  validateConfig, defaultConfig, applyTierModels, listModels, mergeStateView, hasGiggaRun,
+  projectStatePath, readProjectState, CHEAT_SHEET,
+} from "./lib/shared.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const GIGGA_HOME = process.env.GIGGA_HOME ?? join(os.homedir(), ".config", "opencode")
 const GIGGA_DIR = join(GIGGA_HOME, "gigga")
 const DATA_DIR = process.env.GIGGA_DATA_DIR ?? join(os.homedir(), ".local", "share", "opencode")
-const STATE_FILE = join(GIGGA_DIR, "state.json")
+// The dashboard serves ONE project: the directory it was launched from
+// (override with GIGGA_PROJECT_DIR — used by the e2e driver).
+const PROJECT_DIR = process.env.GIGGA_PROJECT_DIR ?? process.cwd()
+const STATE_FILE = projectStatePath(PROJECT_DIR, GIGGA_HOME)
 const CONFIG_FILE = join(GIGGA_DIR, "gigga.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
 const FLAG_FILE = join(GIGGA_DIR, "fasttrack.flag")
@@ -72,7 +78,7 @@ async function readServerInfo() {
   return { url: s.url, reachable, updatedAt: s.updatedAt ?? null }
 }
 
-async function readStateRaw() { return readJson(STATE_FILE) }
+async function readStateRaw() { return readProjectState(PROJECT_DIR, GIGGA_HOME) }
 
 // sqlite fallback (opencode 1.18 persists sessions in opencode.db).
 // Read-only; if node:sqlite is unavailable or the db is absent → null.
@@ -174,13 +180,15 @@ async function handle(req, res) {
 
   // -- API
   if (path === "/api/state" && req.method === "GET") {
-    const [state, server] = await Promise.all([readStateRaw(), readServerInfo()])
+    const [state, server, cfgExists] = await Promise.all([readStateRaw(), readServerInfo(), existsSync(CONFIG_FILE)])
     return json(res, 200, {
       view: mergeStateView(state, {}),
       state,
       server,
       hasRun: hasGiggaRun(state),
       configExists: existsSync(CONFIG_FILE),
+      configured: !!(cfgExists && (await readJson(CONFIG_FILE))?.configured),
+      project: PROJECT_DIR,
     })
   }
 
@@ -224,7 +232,7 @@ async function handle(req, res) {
     const cfg = await readJson(CONFIG_FILE)
     const server = await readServerInfo()
     const models = await listModels({ serverUrl: server.reachable ? server.url : null })
-    return json(res, 200, { config: cfg, configExists: existsSync(CONFIG_FILE), models, defaults: defaultConfig() })
+    return json(res, 200, { config: cfg, configExists: existsSync(CONFIG_FILE), configured: !!cfg?.configured, models, defaults: defaultConfig(), cheatSheet: CHEAT_SHEET })
   }
 
   if (path === "/api/config" && req.method === "POST") {
@@ -239,6 +247,7 @@ async function handle(req, res) {
     try {
       const { mkdir } = await import("node:fs/promises")
       await mkdir(GIGGA_DIR, { recursive: true })
+      parsed.configured = true
       await writeFile(CONFIG_FILE, JSON.stringify(parsed, null, 2) + "\n")
     } catch (e) {
       return json(res, 500, { ok: false, errors: [`failed to write config: ${e}`] })
@@ -280,6 +289,7 @@ const addr = srv.address()
 const urlStr = `http://127.0.0.1:${addr.port}`
 console.log(`GIGGA dashboard listening on ${urlStr}`)
 console.log(`  config dir: ${GIGGA_DIR}`)
+console.log(`  project:    ${PROJECT_DIR}`)
 console.log(`  data dir:   ${DATA_DIR}`)
 
 if (OPEN) {
