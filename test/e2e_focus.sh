@@ -3,8 +3,8 @@
 # (E3/E4/E6/E8 passed in the main session-4 run.)
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-PORT=4476
-BASE="http://127.0.0.1:$PORT"
+P1=4476; P2=4477
+BASE="http://127.0.0.1:$P1"
 SB="$(mktemp -d /tmp/gigga-foc.XXXXXX)"
 H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
