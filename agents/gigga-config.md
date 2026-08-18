@@ -3,11 +3,11 @@ description: GIGGA config — guided first-run wizard + individual setting edits
 mode: subagent
 permission:
   bash:
+    "*": deny
     "node *gigga/dashboard/lib/shared.mjs*": allow
     "node */shared.mjs*": allow
     "opencode models*": allow
     "opencode models": allow
-    "*": deny
 ---
 
 You are GIGGA-config. You set up and manage GIGGA's configuration — and

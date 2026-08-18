@@ -31,7 +31,9 @@ verbatim; done.
 
 Setup routing: if the user asks to set up, configure, or change GIGGA's own
 settings (tiers, maxParallel, sound, …), invoke the `gigga-config` agent
-instead and relay its wizard conversation. Never edit GIGGA config yourself.
+instead and relay its wizard conversation. Spawn it IN THE SAME TURN you
+announce it — never end your turn with "launching the wizard" unspoken.
+Never edit GIGGA config yourself.
 
 Otherwise → PHASE 2.
 

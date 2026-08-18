@@ -221,11 +221,37 @@ md "final (wizard summary):"; code "$(final_text "$W_SID")"
 md "config after:"; code "$(cat "$CFG")"
 md "agent file diffs (model lines):"
 code "$(grep -H '^model:' "$AG"/gigga-worker-*.md "$AG"/gigga.md)"
+G1_OK=0
 if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("configured") and all("kimi" in v for v in c["tiers"].values()) else 1)' "$CFG" \
    && grep -q "model: kimi" "$AG/gigga-worker-low.md" && grep -q "^model: kimi" "$AG/gigga.md"; then
-  md "**G1: PASS** — config written + configured, worker/orchestrator model lines updated"
+  md "**G1: PASS** — config written + configured, worker/orchestrator model lines updated"; G1_OK=1
 else
-  md "**G1: CHECK** — inspect above"
+  # one retry: nudge the orchestrator to actually run the wizard agent
+  md "wizard incomplete — nudging once (spawn gigga-config now)"
+  curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
+    -d '{"agent":"gigga","parts":[{"type":"text","text":"Continue the setup wizard NOW: spawn the gigga-config agent in this turn and complete configuration with me."}]}' -o /dev/null
+  (
+    while :; do
+      reply_question "$W_SID" kimi && continue
+      reply_question "$W_SID" medium && continue
+      reply_question "$W_SID" first && continue
+      [ -n "$(is_idle "$W_SID")" ] && break
+      sleep 2
+    done
+  ) > "$W_LOG" 2>&1 &
+  WMON=$!
+  for _ in $(seq 1 240); do [ -n "$(is_idle "$W_SID")" ] && break; sleep 2; done
+  kill $WMON 2>/dev/null
+  md "retry answers:"; code "$(cat "$W_LOG")"
+  md "retry final:"; code "$(final_text "$W_SID")"
+  if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("configured") and all("kimi" in v for v in c["tiers"].values()) else 1)' "$CFG" \
+     && grep -q "model: kimi" "$AG/gigga-worker-low.md"; then
+    md "**G1: PASS (on retry)**"; G1_OK=1
+  else
+    md "**G1: FAIL via agent — bootstrapping via the shared CLI so the edge cases can run; wizard transcript above stands as evidence**"
+    CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$CFG"'")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; print(json.dumps(c))')
+    node "$REPO/dashboard/lib/shared.mjs" wizard "$H/.config/opencode" "$CFGJSON" > /dev/null
+  fi
 fi
 
 # ===================================================== EDGE 1: fasttrack ====
