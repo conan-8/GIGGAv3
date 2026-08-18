@@ -22,7 +22,7 @@ echo "clean HOME: $HOME (opencode: $(env PATH=$MYPATH sh -c 'command -v opencode
 echo
 echo "=== 1. the REAL one-liner"
 env -i HOME="$HOME" PATH="$MYPATH" TERM=xterm \
-  bash -c "curl -fsSL https://raw.githubusercontent.com/$OWNER/GIGGAv3/main/install.sh | bash"
+  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/'"$OWNER"'/GIGGAv3/main/install.sh | bash'
 RC=$?
 echo "one-liner rc=$RC"
 [ $RC -ne 0 ] && { echo "INSTALL FAILED — aborting"; exit 1; }
@@ -35,13 +35,13 @@ echo "opencode.json:"; cat "$HOME/.config/opencode/opencode.json"
 echo
 echo "=== 3. idempotency (second run)"
 env -i HOME="$HOME" PATH="$MYPATH" TERM=xterm \
-  bash -c "curl -fsSL https://raw.githubusercontent.com/$OWNER/GIGGAv3/main/install.sh | bash" | tail -6
+  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/'"$OWNER"'/GIGGAv3/main/install.sh | bash' | tail -6
 
 echo
 echo "=== 4. failure mode: opencode missing"
 BINS="$(mktemp -d)"
 env -i HOME="$HOME" PATH="$BINS:/usr/bin:/bin" bash -c '
-  curl -fsSL https://raw.githubusercontent.com/'$OWNER'/GIGGAv3/main/install.sh | bash' ; echo "rc=$? (expect 1)"
+  set -o pipefail; curl -fsSL https://raw.githubusercontent.com/'$OWNER'/GIGGAv3/main/install.sh | bash ; echo "rc=$? (expect 1)"
 rm -rf "$BINS"
 
 echo
