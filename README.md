@@ -43,11 +43,18 @@ opencode.json backup).
 1. **opencode TUI** — `gigga` appears in the Tab agent cycle; bell + toast on
    pending questions; `/gigga-setup`, `/gigga-fasttrack`, `/gigga-retry`
    commands.
-2. **GIGGA dashboard** (local web app, coming in a later release) — sidebar
-   with an orchestrator tab and clickable worker boxes (working/done), an
-   overall progress bar (read repo → questions → plan → execute → check →
-   done), red ring + beep on pending questions, glowing fasttrack button,
-   and a config screen. See [dashboard/README.md](dashboard/README.md).
+2. **GIGGA dashboard** (local web app) — run `gigga-dashboard` (installed to
+   `~/.local/bin`, default port 4399, auto-falls back to a free port and
+   opens your browser). Sidebar with clickable worker boxes (#1, #2, … with
+   tier badges and working/done states), an overall progress stepper (read
+   repo → questions → plan → execute → check → done), red ring + beep while a
+   question is pending, a glowing fasttrack button, and a config screen. It
+   attaches to the running opencode server when available (the plugin
+   publishes its URL) and otherwise runs status-only from the state file +
+   opencode's on-disk session storage. Zero dependencies — needs `node` (or
+   `bun`) ≥ 20. See [dashboard/README.md](dashboard/README.md).
+
+<!-- TODO: dashboard screenshot -->
 
 ## Config
 

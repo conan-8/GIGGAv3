@@ -37,6 +37,23 @@ agent pack via a one-line curl installer.
      pendingQuestion, originalRequest, agents: [{id, kind, tier, task,
      status, sessionId, parentSessionId}], updatedAt }`.
 
+## Session-3 refinements (dashboard)
+
+- `gigga-dashboard` launcher (`~/.local/bin`, default port 4399, free-port
+  fallback) starts a zero-dependency node server (`dashboard/server.mjs`)
+  serving the UI plus `/api/state`, `/api/session/:id/messages`,
+  `/api/events` (SSE), `/api/fasttrack`, `/api/config`.
+- Server discovery: the plugin writes `gigga/server.json` from its
+  `serverUrl`; the dashboard health-checks it and degrades to status-only
+  mode (state file + SQLite session storage) when unreachable.
+- UI: progress stepper (READ REPO→…→DONE), orchestrator + numbered worker
+  boxes (tier badges, animated working border with reduced-motion fallback,
+  done/failed states), click-through to an agent's live conversation, red
+  viewport ring + WebAudio beep (880 Hz, 150 ms, unlocked on first gesture,
+  gated on config `sound`) while a question is pending, glowing fasttrack
+  button, config screen (model dropdowns validated against available
+  opencode models; saving rewrites the worker agent files' model lines).
+
 ## Verified against opencode 1.18.18 (2026-08-18)
 
 - Custom agents: markdown in `~/.config/opencode/agents/`, frontmatter `description`, `mode` (primary|subagent|all), `model`, `permission` (per-key allow/ask/deny). Primary agents join the Tab cycle. ✔

@@ -1,15 +1,31 @@
-# GIGGA dashboard (placeholder)
+# GIGGA dashboard
 
-The local GIGGA dashboard web app is built in session 3.
+The local GIGGA web app. Run it with `gigga-dashboard` (installed by
+install.sh into `~/.local/bin`) or directly:
 
-Planned:
-- Sidebar: orchestrator tab + one mini-box per numbered worker (click to view
-  that agent's thinking/progress in the main window; working/done status).
-- Overall progress bar: read repo → questions → plan → execute → check → done.
-- Red ring around the whole UI + beep while a question is pending.
-- Glowing fasttrack button.
-- Config screen.
+```bash
+node ~/.config/opencode/gigga/dashboard/server.mjs [--port 4399] [--no-open]
+```
 
-It will consume `~/.config/opencode/gigga/state.json` (written by
-plugin/gigga.ts) and the opencode server SSE stream (`opencode serve`,
-`GET /event`) via `@opencode-ai/sdk`.
+- Zero dependencies; needs node ≥ 20 (or bun). Starts in well under 2 s.
+- Attaches to the running opencode server (URL discovered from
+  `gigga/server.json`, written by the plugin) and degrades gracefully to
+  status-only mode (state file + `opencode.db` SQLite) when it's down.
+- UI: progress stepper, orchestrator + numbered worker boxes (click one to
+  view that agent's live conversation), red ring + beep on pending
+  questions, glowing fasttrack button, config screen.
+- Env overrides for testing: `GIGGA_HOME` (opencode config dir),
+  `GIGGA_DATA_DIR` (opencode data dir).
+
+Layout:
+
+```
+dashboard/
+├── server.mjs        # HTTP + SSE server (no deps)
+├── lib/shared.mjs    # config validation, tier-model rewrite, model list, state merge
+├── public/           # index.html, app.js, style.css (vanilla, no build step)
+├── bin/gigga-dashboard
+└── test/             # node --test unit tests
+```
+
+Tests: `node --test dashboard/test/*.test.mjs`

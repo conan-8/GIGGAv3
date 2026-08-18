@@ -57,6 +57,25 @@ on the bus (visible in the SSE stream / dashboard).
 ### F. questionRounds cap (bait)
 Vague request: `make the parsers better`, questions answered unhelpfully.
 Expect: at most 2 `question.asked` rounds, then explicit assumptions.
+(Known limitation, session 2: the cap is prompt-only and occasionally
+exceeded — see test/results.)
+
+### G. Dashboard live run (session 3)
+1. `bash test/e2e_dashboard.sh setup` (sandboxed opencode + fixture; prints
+   the sandbox paths and session id).
+2. Start the dashboard against the sandbox:
+   `GIGGA_HOME=<sandbox>/.config/opencode GIGGA_DATA_DIR=<sandbox>/.local/share/opencode \
+    node dashboard/server.mjs --port 4471 --no-open`
+3. Open http://127.0.0.1:4471/ in a browser → empty state, then
+   `bash test/e2e_dashboard.sh prompt "<scenario B request>"`.
+4. Expect: red ring while a question is pending (`#red-ring` un-hidden);
+   numbered worker boxes (#1, #2) with tier badges and working→done status;
+   stepper READ REPO → … → DONE advancing; clicking a box shows that agent's
+   conversation in the main window.
+5. `bash test/e2e_dashboard.sh answer` (repeat per question round).
+6. Fasttrack button click → "✓ FASTTRACK ARMED" + `fasttrack.flag` on disk.
+7. Kill the opencode server → dashboard shows "status-only mode" and worker
+   messages still load via the SQLite disk fallback.
 
 ## Evidence
 

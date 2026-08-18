@@ -162,7 +162,10 @@ async function handle(req, res) {
     if (!full.startsWith(PUBLIC_DIR)) return json(res, 403, { error: "forbidden" })
     try {
       const data = await readFile(full)
-      res.writeHead(200, { "content-type": MIME[extname(full)] ?? "application/octet-stream" })
+      res.writeHead(200, {
+        "content-type": MIME[extname(full)] ?? "application/octet-stream",
+        "cache-control": "no-store",
+      })
       return res.end(data)
     } catch {
       return json(res, 404, { error: "not found" })

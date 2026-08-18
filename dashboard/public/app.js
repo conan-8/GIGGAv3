@@ -12,6 +12,7 @@ let activeAgentKey = null // "orchestrator" | "worker:3" | "recon" | ...
 let lastPendingQuestion = false
 let audioCtx = null
 let fasttrackArmed = false
+let lastRenderSig = null
 
 // ------------------------------------------------------------ utilities ---
 function agentKey(a, fallback) {
@@ -70,6 +71,11 @@ async function fetchState() {
 
 function applyState(state) {
   const prevPending = current.state?.pendingQuestion
+  // skip DOM churn when neither the state nor the selection changed — the
+  // periodic fetch would otherwise rebuild boxes mid-click
+  const sig = JSON.stringify({ s: state, k: activeAgentKey, h: location.hash, ce: current.configExists, r: current.server?.reachable })
+  if (sig === lastRenderSig) return
+  lastRenderSig = sig
   current.state = state
   const phase = state?.phase ?? "idle"
   const agents = state?.agents ?? []
