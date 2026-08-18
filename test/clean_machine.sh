@@ -40,8 +40,10 @@ env -i HOME="$HOME" PATH="$MYPATH" TERM=xterm \
 echo
 echo "=== 4. failure mode: opencode missing"
 BINS="$(mktemp -d)"
-env -i HOME="$HOME" PATH="$BINS:/usr/bin:/bin" bash -c '
-  set -o pipefail; curl -fsSL https://raw.githubusercontent.com/'$OWNER'/GIGGAv3/main/install.sh | bash ; echo "rc=$? (expect 1)"
+env -i HOME="$HOME" PATH="$BINS:/usr/bin:/bin" OWNER="$OWNER" bash -c '
+  set -o pipefail
+  curl -fsSL "https://raw.githubusercontent.com/$OWNER/GIGGAv3/main/install.sh" | bash
+  echo "rc=$? (expect 1)"'
 rm -rf "$BINS"
 
 echo
