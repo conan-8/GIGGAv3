@@ -158,7 +158,7 @@ d = json.load(sys.stdin)
 s = d.get("state") or {}
 print("phase:", s.get("phase"))
 for a in s.get("agents", []):
-    print(f'  {a.get("kind")} #{a.get("id")} {a.get("status")} {str(a.get("task", ""))[-40:]}')
+    print(" ", a.get("kind"), a.get("id"), a.get("status"), str(a.get("task", ""))[-40:])
 ')"
 md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$ST")"
 if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$ST"; then
