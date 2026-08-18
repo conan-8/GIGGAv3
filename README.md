@@ -24,8 +24,6 @@ Then:
 Uninstall: `bash uninstall.sh` (removes only GIGGA files, restores your
 opencode.json backup).
 
-<!-- TODO: animated GIF of the orchestrator flow -->
-<!-- TODO: dashboard screenshot -->
 
 ## Contents
 
