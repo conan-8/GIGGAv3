@@ -3,8 +3,9 @@ description: GIGGA retry — fix only the gaps the checker reported, then re-che
 agent: gigga
 ---
 
-The last GIGGA check FAILED. Retry now: re-read the checker's gap list from
-this session, dispatch workers to fix ONLY those gaps (do not redo the whole
-plan), then run the gigga-checker again and report PASS/FAIL.
+The last check FAILED. Go directly to PHASE 4b: re-read the checker's last
+gap list from this session (or the one below), spawn workers to fix ONLY
+those gaps — do not redo the whole plan — then run gigga-checker again
+(PHASE 5) and report the verdict.
 
 $ARGUMENTS
