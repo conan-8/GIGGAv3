@@ -64,6 +64,9 @@ cfg = json.load(open(p))
 cfg["tiers"] = {"low": model, "medium": model, "high": model}
 json.dump(cfg, open(p, "w"), indent=2)
 PY
+# session-4 first-run gate: mark configured via the shared CLI (wizard logic)
+CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/gigga/gigga.config.json")); c["configured"]=True; print(json.dumps(c))')
+node "$REPO/dashboard/lib/shared.mjs" wizard "$H/.config/opencode" "$CFGJSON" >/dev/null
 
 # Pre-grant permissions so the headless server never blocks on an ask
 # (mirrors a TUI user clicking "allow"; read-only agent denies are agent-level).
