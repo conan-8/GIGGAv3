@@ -22,6 +22,9 @@ for f in gigga-setup gigga-fasttrack gigga-retry; do
 done
 rm -f "$GIGGA_HOME/plugins/gigga.ts"
 
+# Dashboard launcher (the dashboard itself lives under gigga/, removed above).
+rm -f "$HOME/.local/bin/gigga-dashboard"
+
 # Restore newest opencode.json backup; drop our subagent_depth key otherwise.
 OPENCODE_JSON="$GIGGA_HOME/opencode.json"
 LATEST_BACKUP="$(ls -1t "$OPENCODE_JSON".backup.* 2>/dev/null | head -n 1 || true)"

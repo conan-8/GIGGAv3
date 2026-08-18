@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GIGGA Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="red-ring" hidden></div>
+
+  <div id="app">
+    <aside id="sidebar">
+      <h1 class="brand">GIGGA</h1>
+
+      <section class="stepper" id="stepper" aria-label="Overall progress">
+        <div class="steps">
+          <div class="step" data-phase="recon"><span>READ REPO</span></div>
+          <div class="step" data-phase="questions"><span>QUESTIONS</span></div>
+          <div class="step" data-phase="plan"><span>PLAN</span></div>
+          <div class="step" data-phase="executing"><span>EXECUTE</span></div>
+          <div class="step" data-phase="checking"><span>CHECK</span></div>
+          <div class="step" data-phase="done"><span>DONE</span></div>
+        </div>
+        <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+      </section>
+
+      <section id="agent-boxes" aria-label="Agents">
+        <div class="agent-box orchestrator" id="box-orchestrator" data-agent="orchestrator" tabindex="0">
+          <div class="head"><span class="num">ORCH</span><span class="badge tier">—</span></div>
+          <div class="task">orchestrator</div>
+        </div>
+        <div id="worker-boxes"><!-- numbered workers + others injected --></div>
+      </section>
+
+      <button id="fasttrack-btn" title="Skip planning for the next request">⚡ FASTTRACK</button>
+      <a id="config-link" href="#config">⚙ config</a>
+      <div id="server-note" class="note"></div>
+    </aside>
+
+    <main id="main">
+      <div id="empty-state" class="panel">
+        <h2>No GIGGA session</h2>
+        <p>Start opencode and press <kbd>Tab</kbd> to switch to the <b>gigga</b> agent.</p>
+        <p class="dim">The dashboard attaches automatically once a run begins.</p>
+      </div>
+
+      <div id="agent-view" class="panel" hidden>
+        <header id="agent-view-head">
+          <span id="agent-view-title">—</span>
+          <span id="agent-view-status"></span>
+        </header>
+        <div id="messages"></div>
+      </div>
+
+      <div id="config-view" class="panel" hidden>
+        <h2>GIGGA config</h2>
+        <form id="config-form">
+          <label>low tier
+            <select name="low" required></select></label>
+          <label>medium tier
+            <select name="medium" required></select></label>
+          <label>high tier
+            <select name="high" required></select></label>
+          <label>default tier
+            <select name="defaultTier">
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select></label>
+          <label>maxParallel
+            <input name="maxParallel" type="number" min="1" max="20" value="5" /></label>
+          <label class="inline"><input name="autoRetry" type="checkbox" /> autoRetry</label>
+          <label class="inline"><input name="sound" type="checkbox" checked /> sound</label>
+          <label>questionRounds
+            <input name="questionRounds" type="number" min="1" max="5" value="2" /></label>
+          <button type="submit" id="config-save">Save</button>
+          <span id="config-msg"></span>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

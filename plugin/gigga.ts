@@ -230,6 +230,23 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
 export const GiggaPlugin: Plugin = async (input) => {
   serverUrl = input.serverUrl ?? null
   await log(`plugin loaded (directory=${input.directory})`)
+  // server discovery for the dashboard: record where opencode is listening
+  try {
+    await mkdir(GIGGA_DIR, { recursive: true })
+    await writeFile(
+      join(GIGGA_DIR, "server.json"),
+      JSON.stringify(
+        {
+          url: serverUrl?.href ?? null,
+          directory: input.directory,
+          pid: process.pid,
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ) + "\n",
+    )
+  } catch {}
 
   return {
     async event(input) {

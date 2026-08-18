@@ -68,9 +68,29 @@ cp "$SRC"/agents/*.md        "$GIGGA_HOME/agents/"
 cp "$SRC"/commands/*.md      "$GIGGA_HOME/commands/"
 cp "$SRC"/plugin/gigga.ts    "$GIGGA_HOME/plugins/"
 cp "$SRC"/gigga.config.default.json "$GIGGA_DIR/"
-if [ -d "$SRC/dashboard" ]; then
+
+# dashboard (server + UI + launcher)
+if [ -f "$SRC/dashboard/server.mjs" ]; then
   mkdir -p "$GIGGA_DIR/dashboard"
   cp -R "$SRC/dashboard/." "$GIGGA_DIR/dashboard/"
+  chmod +x "$GIGGA_DIR/dashboard/bin/gigga-dashboard" 2>/dev/null || true
+  # put gigga-dashboard on PATH via a standard user bin dir (no shell rc edits)
+  BIN_DIR="$HOME/.local/bin"
+  if mkdir -p "$BIN_DIR" 2>/dev/null && [ -w "$BIN_DIR" ]; then
+    cat > "$BIN_DIR/gigga-dashboard" <<'LAUNCHER'
+#!/usr/bin/env bash
+exec "${GIGGA_DASHBOARD_NODE:-node}" "$HOME/.config/opencode/gigga/dashboard/server.mjs" "$@"
+LAUNCHER
+    chmod +x "$BIN_DIR/gigga-dashboard"
+    case ":$PATH:" in
+      *":$BIN_DIR:"*) ;;
+      *) msg "NOTE: $BIN_DIR is not on your PATH — add it to use the 'gigga-dashboard' command:" ;;
+    esac
+    msg "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+  else
+    msg "Could not write $BIN_DIR — start the dashboard with:"
+    msg "  node $GIGGA_DIR/dashboard/server.mjs"
+  fi
 fi
 
 # Config: never overwrite an existing one.
