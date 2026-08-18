@@ -1,0 +1,12 @@
+{
+  "tiers": {
+    "low": "anthropic/claude-haiku-4-5",
+    "medium": "anthropic/claude-sonnet-4-5",
+    "high": "anthropic/claude-opus-4-1"
+  },
+  "defaultTier": "medium",
+  "maxParallel": 5,
+  "autoRetry": false,
+  "sound": true,
+  "questionRounds": 2
+}
