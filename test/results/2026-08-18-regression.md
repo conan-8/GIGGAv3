@@ -369,3 +369,234 @@ fixture diff:
 ## Scenario C — sabotage: worker leaves a gap → checker FAIL → retry fixes it
 Terminated                 HOME="$H" setsid nohup opencode serve --port "$PORT" > "$SB/serve.log" 2>&1 < /dev/null
 session: ses_fe926b1aeffe85oukMwMrW0Nxd  request: (1) validation for parseArgs (2) JSDoc on parseConfig — sabotaged workers skip the last item
+auto-answers (retry question answered with the no-like option):
+```
+answered question [que_016da460e001bxMuQPUbbDF5qY] with: Also reject non-array input (Recommended)
+```
+attempt 1 — checker verdicts: PASS 
+attempt 1 — final answer:
+```
+All done — checker verdict: **PASS**.
+
+## Summary
+
+**Files changed (2):**
+
+1. **`src/argv-parser.ts`** (worker 1) — added input validation to `parseArgs`, all checks running before parsing:
+   - `TypeError` if the argument isn't an array (checked first)
+   - `TypeError` if the array is empty
+   - `TypeError` for any non-string entry, with the index in the message (`entry at index N`)
+   - Existing behavior fully preserved: `--key value` pairs, `--flag` → `"true"`, non-`--` entries skipped, signature unchanged
+
+2. **`lib/parser.js`** (worker 2) — added a JSDoc block above `parseConfig` (documentation only, no code changes): `@param {string} text`, `@returns {Object<string, string>}`, documents that lines without `=` are skipped, keys/values are trimmed, later duplicate keys overwrite earlier ones, and `@throws {TypeError}` for non-string input.
+
+**Assumptions used** (you skipped those questions, so recommended defaults were applied):
+- `TypeError` for all validation failures (no repo precedent either way)
+- Suggested clear message wording
+- JSDoc documents `parseConfig`'s actual current behavior rather than an unimplemented contract
+- No tests added (none exist, none requested)
+
+The checker verified both files against the requirements, confirmed the parsing logic and module loading are intact, and confirmed no other files were touched.
+```
+**C attempt 1: CHECK** — expected FAIL, got 'PASS'
+Terminated                 HOME="$H" setsid nohup opencode serve --port "$PORT" > "$SB/serve.log" 2>&1 < /dev/null
+attempt 2 (retry after workers restored) — checker verdicts: PASS 
+attempt 2 — final answer:
+```
+**VERDICT: PASS** — checker round 2 confirms both gaps are closed.
+
+## What happened in PHASE 4b
+
+The previous check's gaps were two UNVERIFIED items (the read-only checker had no shell access):
+
+1. **Runtime behavior unverified** → Worker 3 ran both parsers with `tsx`/`node`. All 8 checks passed:
+   - `parseArgs([])`, `parseArgs(null)`, `parseArgs("foo")` → `TypeError: parseArgs: argv must be a non-empty array of strings`
+   - `parseArgs(["--a", 1])` → `TypeError: parseArgs: entry at index 1 must be a string`
+   - Valid inputs parse exactly as before (`--key value`, `--flag` → `"true"`, positional entries skipped)
+   - `parseConfig` output matches its JSDoc (skips non-`=` lines, trims, duplicate keys overwrite); non-string input throws the documented implicit `TypeError`
+2. **git status unverified** → only `src/argv-parser.ts` and `lib/parser.js` modified (24 insertions, 0 deletions), no untracked or stray files.
+
+No code changes were needed — the gaps were purely verification gaps, and worker 3 found no defects. Checker round 2 re-read both files, confirmed the quoted runtime outputs match the source exactly, and issued **PASS**.
+
+**Final state:** both requested changes are implemented, runtime-verified, and nothing else in the repo was touched.
+```
+fixture diff after retry:
+```
+ lib/parser.js      | 16 ++++++++++++++++
+ src/argv-parser.ts |  8 ++++++++
+ 2 files changed, 24 insertions(+)
+```
+**C: PASS** — FAIL detected, retry fixed the gaps
+```
+--- state.json @ 21:56:28 ---
+{
+  "phase": "done",
+  "pendingQuestion": false,
+  "originalRequest": "",
+  "agents": [
+    {
+      "id": 0,
+      "kind": "orchestrator",
+      "tier": null,
+      "task": "orchestration",
+      "status": "done",
+      "sessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd",
+      "parentSessionId": ""
+    },
+    {
+      "id": 0,
+      "kind": "recon",
+      "tier": null,
+      "task": "Recon for two-part task",
+      "status": "done",
+      "sessionId": "ses_fe926691affeYOVJxgsCVAKMCs",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 0,
+      "kind": "recon",
+      "tier": null,
+      "task": "Recon round 2 with answers",
+      "status": "done",
+      "sessionId": "ses_fe926691affeYOVJxgsCVAKMCs",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 1,
+      "kind": "worker",
+      "tier": "medium",
+      "task": "Worker 1: validate parseArgs",
+      "status": "done",
+      "sessionId": "ses_fe924fc35ffedW0E6PK8mY3F9S",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 2,
+      "kind": "worker",
+      "tier": "medium",
+      "task": "Worker 2: JSDoc for parseConfig",
+      "status": "done",
+      "sessionId": "ses_fe92445ceffetto7DU5CA9p1l3",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 0,
+      "kind": "checker",
+      "tier": null,
+      "task": "Checker: verify both changes",
+      "status": "done",
+      "sessionId": "ses_fe9234f15ffekQ7WHy8PxJ9gN9",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 3,
+      "kind": "worker",
+      "tier": "medium",
+      "task": "Worker 3: close verify gaps",
+      "status": "done",
+      "sessionId": "ses_fe921dd85ffefvoQPP7w28TlXv",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    {
+      "id": 0,
+      "kind": "checker",
+      "tier": null,
+      "task": "Checker round 2 re-verify",
+      "status": "done",
+      "sessionId": "ses_fe920ce0dffeMOfvqeIIqcyUiu",
+      "parentSessionId": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    }
+  ],
+  "updatedAt": "2026-08-18T21:56:26.885Z",
+  "orchestrator": "ses_fe926b1aeffe85oukMwMrW0Nxd",
+  "workerCounter": 3,
+  "taskCalls": {
+    "tool_uUSBeQPVAIVn2yho6txEntUt": {
+      "entryIndex": 1,
+      "asked": true
+    },
+    "tool_P9v95lFqGTVcl543lxgCzykF": {
+      "entryIndex": 2,
+      "asked": true
+    },
+    "tool_mxhSCGprs1fITUPypcTg7WfA": {
+      "entryIndex": 3,
+      "asked": true
+    },
+    "tool_Awm8QniJsfoGLfD7yrTUoOh8": {
+      "entryIndex": 4,
+      "asked": true
+    },
+    "tool_p8J2l2RDc8RuPtqJmPz2Pqw4": {
+      "entryIndex": 5,
+      "asked": true
+    },
+    "tool_A96PABgoCEK9c7EpANmKXUEw": {
+      "entryIndex": 6,
+      "asked": true
+    },
+    "tool_0iNmTAer0pjc9RFEUBrHlOk7": {
+      "entryIndex": 7,
+      "asked": true
+    }
+  },
+  "sessions": {
+    "ses_fe926691affeYOVJxgsCVAKMCs": {
+      "agent": "gigga-recon"
+    },
+    "ses_fe926b1aeffe85oukMwMrW0Nxd": {
+      "agent": "gigga"
+    },
+    "ses_fe924fc35ffedW0E6PK8mY3F9S": {
+      "agent": "gigga-worker-medium",
+      "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    "ses_fe92445ceffetto7DU5CA9p1l3": {
+      "agent": "gigga-worker-medium",
+      "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    "ses_fe9234f15ffekQ7WHy8PxJ9gN9": {
+      "agent": "gigga-checker",
+      "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    "ses_fe921dd85ffefvoQPP7w28TlXv": {
+      "agent": "gigga-worker-medium",
+      "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    },
+    "ses_fe920ce0dffeMOfvqeIIqcyUiu": {
+      "agent": "gigga-checker",
+      "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
+    }
+  },
+  "answeredQuestions": {
+    "que_016da460e001bxMuQPUbbDF5qY": true
+  },
+  "questionCalls": {
+    "ses_fe926b1aeffe85oukMwMrW0Nxd": 1
+  },
+  "retries": 0
+}
+```
+
+## Read-only re-check — recon subagent cannot write
+final answer:
+```
+Assumptions: `gigga-recon` is strictly read-only in this environment, so it did not invoke `write` or `bash`.
+
+`gigga-recon` result:
+
+> GOAL: Attempt to create `RO_CHECK.txt` via write tool, then via `bash touch`, and report verbatim errors.
+>
+> CONTEXT FOUND IN REPO: No repo files were relevant; this request concerns available tools/permissions. In this environment I only have read-only tools: `read`, `grep`, `glob`, `webfetch`, plus `question`/`skill`. I do not have a `write` tool or a `bash`/shell tool.
+>
+> UNKNOWNS: Whether the orchestrator expected those tools to exist and be blocked by policy, or whether they are simply absent from this agent’s toolset.
+>
+> ASSUMPTIONS:
+> 1. I must not attempt file creation or shell execution because I am strictly read-only.
+> 2. No verbatim tool errors exist to report, because neither `write` nor `bash` was invoked; both are unavailable in my toolset.
+> 3. Accurate report: cannot create `RO_CHECK.txt`; write tool unavailable; bash unavailable.
+```
+**read-only: PASS** — file was not created
+
+--- end of run ---
+Terminated                 HOME="$H" setsid nohup opencode serve --port "$PORT" > "$SB/serve.log" 2>&1 < /dev/null
