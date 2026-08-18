@@ -31,7 +31,8 @@ First tagged release. Full spec implemented and audited
 - The question-round cap counts question-tool calls, not interaction
   rounds — a model issuing many calls in one round can be silenced early
   (under-asking, never over-asking).
-- Sub-subagent delegation depends on opencode exposing the task tool to
-  subagents (`permission.task: allow` on workers, verified on 1.18.18).
+- Sub-subagent delegation is prepared for (`subagent_depth: 2`, worker
+  prompts) but opencode 1.18.18 does not expose the task tool to subagents
+  (COMPLIANCE row 12, DEVIATIONS #26) — escalated, not silently claimed.
 - Bell on macOS/Windows terminals is documented (README troubleshooting),
   not lab-tested.

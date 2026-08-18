@@ -839,3 +839,219 @@ IndexError: list index out of range
 Traceback (most recent call last):
   File "<stdin>", line 3, in <module>
 IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+IndexError: list index out of range
+== caller -> spawned map:
+2x gigga -> gigga-checker
+2x gigga -> gigga-recon
+4x gigga -> gigga-worker-high
+2x gigga -> gigga-worker-low
+2x gigga -> gigga-worker-medium
