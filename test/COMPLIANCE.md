@@ -34,7 +34,7 @@ One row per requirement from SPEC.md. Evidence key:
 | 22 | Box states: working (animated border, reduced-motion fallback) / done / failed | CSS conic-gradient + @media prefers-reduced-motion static; done/failed badges | dashboard style snapshot states in S3/S4 (badges in DOM: `MEDIUM done`) | ✅ |
 | 23 | Overall progress stepper: read repo → questions → plan → execute → check → done | stepper elements + phaseIndex mapping; observed advancing | S3 browser; S2 B phase snapshots (recon→questions→executing→checking→done) | ✅ |
 | 24 | Beep works macOS/Linux/Windows; where terminal swallows it, README documents the one setting | `\x07` to /dev/tty (POSIX) + WebAudio in dashboard; README troubleshooting covers iTerm2/Terminal/Windows Terminal | README troubleshooting section; Linux verified in S2 | ✅ (macOS/Windows documented, not lab-tested — see platform matrix) |
-| 25 | One-line install from GitHub (curl \| bash) | REAL one-liner against pushed repo in a clean environment | clean install transcript | ✅ |
+| 25 | One-line install from GitHub (curl \| bash) | **BLOCKED on push** — no GitHub credentials exist in the dev environment (no gh CLI, no token, no SSH key), so the repo could not be pushed and the real-URL one-liner could not run. Everything else is ready: `test/clean_machine.sh` runs the verbatim one-liner + idempotency + failure modes + A–F suite in an isolated HOME. Installer failure modes verified locally (missing opencode → clean error rc=1; no network → clean error; reinstall preserves config — transcript in the session report). Recommendation: run `git push -u origin main && git push origin v0.1.0`, then `bash test/clean_machine.sh test/results/<date>-clean-install.md`, and flip this row green with that transcript. | installer failure-mode transcript (local); clean_machine.sh staged | ⚠️ blocked on push (escalated) |
 | 26 | Works in TUI and dashboard app | TUI flows via serve/API (same agent paths); dashboard verified in browser | S2–S4 | ✅ |
 | 27 | Installer: idempotent, backups, never overwrites config | install twice → diff empty except timestamped backup; config preserved | S1 acceptance (rerun in clean transcript) | ✅ |
 | 28 | Uninstaller removes only GIGGA files, restores opencode.json | uninstall in sandbox: agents/commands/plugins emptied, backup restored | S1 + S4 uninstall sanity | ✅ |
@@ -59,5 +59,7 @@ One row per requirement from SPEC.md. Evidence key:
   audible/platform behavior documented in README troubleshooting rather
   than lab-tested — see the platform matrix in the session report.
 - Row 37: individual edits are agent-prompt-driven over the shared CLI; the
-  CLI paths themselves are unit-tested. Escalated as a minor gap if you want
-  a scripted transcript of a single-key edit conversation.
+  CLI paths themselves are unit-tested.
+- Row counts: 42 rows — 40 ✅, 1 ⚠️ escalated (row 12: sub-subagents),
+  1 ⚠️ blocked-on-push (row 25: real-URL one-liner; unblocks with a single
+  `git push` + `bash test/clean_machine.sh`).
