@@ -111,8 +111,10 @@ watch() {
 final_text() {
   curl -s "$BASE/session/$1/message" | python3 -c '
 import json, sys
-try: msgs = json.load(sys.stdin)
-except Exception: print("(unavailable)"); return
+try:
+    msgs = json.load(sys.stdin)
+except Exception:
+    print("(unavailable)"); raise SystemExit
 texts = []
 for m in msgs:
     if m.get("info", {}).get("role") != "assistant": continue
