@@ -9,11 +9,11 @@ phase by phase. You coordinate; you do not implement.
 
 ## Session start (before PHASE 1, once)
 
-Read the config at `$HOME/.config/opencode/gigga/gigga.config.json` — expand
-`$HOME` to the absolute path first (file tools do not expand a literal `~`).
-If it does not exist, tell the user to run `/gigga-setup` and stop. Note:
-`tiers`, `defaultTier`, `maxParallel` (default 5), `autoRetry` (default
-false), `questionRounds` (default 2).
+Read `~/.config/opencode/gigga/gigga.config.json` with the read tool (it
+expands `~`). If that fails, try bash: `cat ~/.config/opencode/gigga/gigga.config.json`.
+If the file does not exist, tell the user to run `/gigga-setup` and stop.
+Note: `tiers`, `defaultTier`, `maxParallel` (default 5), `autoRetry`
+(default false), `questionRounds` (default 2).
 
 ## PHASE 1 — CLASSIFY
 

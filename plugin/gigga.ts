@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -126,24 +126,59 @@ async function writeState(s: RunState) {
   await rename(tmp, STATE_FILE) // atomic on POSIX
 }
 
-// Read-modify-write. `mutate` returns true if it changed anything; the
-// caller proceeds with side effects only when this instance's change landed.
-async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+// Cross-instance lock: mkdir is atomic, so concurrent plugin instances
+// serialize their read-modify-write cycles. A stale lock (holder crashed)
+// is stolen after 5s.
+const LOCK_DIR = join(GIGGA_DIR, ".lock")
+async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  await mkdir(GIGGA_DIR, { recursive: true })
+  for (let i = 0; ; i++) {
     try {
-      const s = await readState()
-      if (!mutate(s)) return false
-      await writeState(s)
-      return true
-    } catch (e) {
-      if (attempt === 2) {
-        await log(`state update failed: ${String(e)}`)
-        return false
+      await mkdir(LOCK_DIR)
+      break
+    } catch {
+      let age = 0
+      try {
+        age = Date.now() - (await stat(LOCK_DIR)).mtimeMs
+      } catch {
+        break // lock vanished between mkdir and stat — retry immediately
       }
-      await new Promise((r) => setTimeout(r, 5 + Math.random() * 20))
+      if (age > 5000) {
+        await rm(LOCK_DIR, { recursive: true, force: true }).catch(() => {})
+        continue
+      }
+      if (i > 200) return fn() // ~2s: proceed unlocked rather than hang
+      await new Promise((r) => setTimeout(r, 10))
     }
   }
-  return false
+  try {
+    return await fn()
+  } finally {
+    await rm(LOCK_DIR, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+// Read-modify-write under the lock. `mutate` returns true if it changed
+// anything; the caller proceeds with side effects only when this instance's
+// change landed.
+async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
+  return withLock(async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const s = await readState()
+        if (!mutate(s)) return false
+        await writeState(s)
+        return true
+      } catch (e) {
+        if (attempt === 2) {
+          await log(`state update failed: ${String(e)}`)
+          return false
+        }
+        await new Promise((r) => setTimeout(r, 5 + Math.random() * 20))
+      }
+    }
+    return false
+  })
 }
 
 async function bell() {
