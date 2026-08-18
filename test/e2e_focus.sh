@@ -40,11 +40,12 @@ cfg["permission"] = {"external_directory": {"*": "allow"}, "read": {"*": "allow"
 json.dump(cfg, open(p, "w"), indent=2)
 PY
 mk_fx() { local d="$1"; mkdir -p "$d"; cp -r "$REPO/test/fixtures/." "$d/"; git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.email=f@t -c user.name=f commit -qm init; }
-start_server() {
+start_server() { # start_server <port> <dir> — ONE opencode server PER PROJECT
   stop_all
-  ( cd "$SB" && HOME="$H" setsid nohup opencode serve --port "$PORT" > "$SB/serve.log" 2>&1 < /dev/null & )
-  for _ in $(seq 1 30); do curl -s -o /dev/null "$BASE/global/health" && break; sleep 1; done
-  : > "$SSE"; curl -sN "$BASE/event" >> "$SSE" &
+  local port="$1" dir="$2"
+  ( cd "$dir" && HOME="$H" setsid nohup opencode serve --port "$port" > "$SB/serve-$port.log" 2>&1 < /dev/null & )
+  for _ in $(seq 1 30); do curl -s -o /dev/null "http://127.0.0.1:$port/global/health" && break; sleep 1; done
+  : > "$SSE"; curl -sN "http://127.0.0.1:$port/event" >> "$SSE" &
   sleep 2
 }
 sess_new() { curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$1\",\"agent\":\"${2:-gigga}\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'; }
@@ -138,7 +139,7 @@ for cid in order: print(seen[cid][0] + " " + seen[cid][1])
 }
 
 FX="$SB/fx1"; mk_fx "$FX"
-start_server
+start_server "$P1" "$FX"
 
 # ============================================================ EDGE 1 ======
 md ""
@@ -186,7 +187,7 @@ d = json.load(open(sys.argv[1]))
 d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).isoformat() + "Z"
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
-start_server
+start_server "$P1" "$FX"
 PROBE=$(sess_new "$FX" gigga-fasttrack)
 ask "$PROBE" gigga-fasttrack "Reply with just: ok" >/dev/null
 sleep 20
@@ -201,16 +202,20 @@ fi
 md ""
 md "## Edge 5 — two projects, per-project state + dashboards"
 FX2="$SB/fx2"; mk_fx "$FX2"
-E5A=$(sess_new "$FX"); E5B=$(sess_new "$FX2")
+# project 1 run (server rooted in fx1)
+start_server "$P1" "$FX"
+E5A=$(sess_new "$FX")
 ask "$E5A" gigga "Add a clamp(a,min,max) helper to src/calc.ts." >/dev/null
+watch "$E5A" 360 first >/dev/null
+md "fx1 tasks: $(tasks_for "$E5A" | tr '\n' ' ')"
+stop_all
+# project 2 run (server rooted in fx2)
+start_server "$P2" "$FX2"
+E5B=$(sess_new "$FX2" gigga)
 ask "$E5B" gigga "Add a slug(text) function to lib/util.js." >/dev/null
-# answer questions for either session until both idle
-for _ in $(seq 1 150); do
-  answer_first first >/dev/null
-  A=$(is_idle "$E5A"); B=$(is_idle "$E5B")
-  [ -n "$A" ] && [ -n "$B" ] && break
-  sleep 2
-done
+watch "$E5B" 360 first >/dev/null
+md "fx2 tasks: $(tasks_for "$E5B" | tr '\n' ' ')"
+stop_all
 S1=$(pstate "$FX"); S2=$(pstate "$FX2")
 md "state files:"; code "$S1
 $S2"
@@ -231,15 +236,15 @@ if [ -f "$S1" ] && [ -f "$S2" ] && [ "$S1" != "$S2" ] \
 else
   md "**E5: CHECK**"
 fi
+# restore fx1 server for later sections
+start_server "$P1" "$FX"
 
-# ============================================================ EDGE 7 ======
-md ""
-md "## Edge 7 — worker fails mid-task"
+## Edge 7 — worker fails mid-task"
 for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do
   sed -i '/^You are a GIGGA worker agent./i\
 TEST MODE: immediately report Status: blocked with reason "injected failure"; do no work at all.' "$f"
 done
-start_server
+start_server "$P1" "$FX"
 E7=$(sess_new "$FX")
 ask "$E7" gigga "Add an average(list) function to src/calc.ts." >/dev/null
 watch "$E7" 420 first >/dev/null
@@ -259,7 +264,7 @@ for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do sed -i '/^TEST MODE:
 # ============================================================ STATUS ======
 md ""
 md "## /gigga-status from a real run"
-start_server
+start_server "$P1" "$FX"
 ST=$(sess_new "$FX")
 ask "$ST" gigga "Add a median(list) function to src/calc.ts." >/dev/null
 watch "$ST" 300 first >/dev/null
