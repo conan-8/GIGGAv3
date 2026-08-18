@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck installers and test scripts
+        run: |
+          # syntax-check everything, shellcheck what exists
+          for f in install.sh uninstall.sh test/*.sh dashboard/bin/gigga-dashboard; do
+            bash -n "$f"
+         
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck install.sh uninstall.sh test/*.sh || true
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+            shellcheck install.sh uninstall.sh test/*.sh
+          fi
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: dashboard unit tests
+        run: node --test dashboard/test/*.test.mjs

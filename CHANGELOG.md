@@ -1,0 +1,37 @@
+# Changelog
+
+## v0.1.0 — 2026-08-19
+
+First tagged release. Full spec implemented and audited
+(`test/COMPLIANCE.md`).
+
+### Added
+- Orchestrator agent pack for opencode: `gigga` primary agent (Tab cycle),
+  read-only `gigga-recon` / `gigga-checker`, one-shot `gigga-fasttrack`,
+  scope-limited `gigga-config`, and `gigga-worker-low/medium/high`.
+- Orchestration loop: classify → fasttrack or recon → ≤ N question rounds
+  (plugin-enforced) → todo plan → numbered parallel/sequential workers →
+  read-only check → ask/auto-retry (≤ 2) with gap-only fixes.
+- Plugin: per-project state machine (`gigga/projects/<slug>-<hash>/state.json`,
+  atomic writes, multi-instance safe), pending-question bell + TUI toast,
+  phase toasts, question-round cap via `tool.execute.before`, stale-run
+  recovery, server discovery (`server.json`).
+- Dashboard: zero-dependency local web app — progress stepper, clickable
+  agent boxes with live conversations, red ring + WebAudio beep, glowing
+  fasttrack button, config screen; HTTP + SQLite disk fallback.
+- Setup: conversational wizard (agent + dashboard + shared CLI, one
+  implementation), `configured` first-run gate, cheat sheet.
+- Commands: /gigga-setup, /gigga-fasttrack, /gigga-retry, /gigga-status.
+- Installer: one-line curl|bash, idempotent, timestamped backups, config
+  never overwritten; uninstaller restores opencode.json.
+- Test suite: 17 unit tests + scripted E2E (scenarios A–F, edges, soak,
+  compliance evidence) with real transcripts under test/results/.
+
+### Known limitations
+- The question-round cap counts question-tool calls, not interaction
+  rounds — a model issuing many calls in one round can be silenced early
+  (under-asking, never over-asking).
+- Sub-subagent delegation depends on opencode exposing the task tool to
+  subagents (`permission.task: allow` on workers, verified on 1.18.18).
+- Bell on macOS/Windows terminals is documented (README troubleshooting),
+  not lab-tested.

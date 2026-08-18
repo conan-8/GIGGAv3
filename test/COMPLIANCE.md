@@ -1,0 +1,63 @@
+# GIGGA spec compliance audit — v0.1.0 (2026-08-19)
+
+One row per requirement from SPEC.md. Evidence key:
+- `unit` = `node --test dashboard/test/*.test.mjs` (17/17 green)
+- `S2/S3/S4` = scenario evidence in `test/results/2026-08-18*.md` (session runs)
+- `soak` = `test/results/2026-08-19-soak.md`
+- `deleg` = `test/results/2026-08-19-delegation.md`
+- `clean` = clean-environment install transcript `test/results/2026-08-19-clean-install.md`
+- `docs` = stated in README/SPEC/DEVIATIONS with rationale
+
+| # | requirement (SPEC.md) | how verified | evidence | status |
+|---|---|---|---|---|
+| 1 | Primary agent `gigga`, Tab-switchable like Plan/Build | `mode: primary` in agents/gigga.md; server `/agent` lists gigga as primary; sessions run with agent=gigga | S2 (agent list output), all scenario transcripts | ✅ |
+| 2 | Simple question / one-step task → fasttrack directly, answer, done | scenario A: `gigga-fasttrack` task spawned, no recon, direct answer | S2/S4 `regression` A: PASS | ✅ |
+| 3 | Everything else → read-only recon inspects repo + request | task streams show `gigga-recon` invoked before workers | S2 B, S4 regression B | ✅ |
+| 4 | Clarifying questions, MAX 2 rounds; then explicit assumptions | recon invoked ≤2× per run; assumptions quoted in finals; plugin cap enforcement | S4 session4 E8 (questionRounds=1 held); S4 regression F PASS; cap log line in plugin events.log | ✅ |
+| 5 | Pending question signaled in TUI: bell + toast | plugin writes `\x07` to /dev/tty + POSTs /tui/show-toast on question.asked | S2 E: plugin log lines + `tui.toast.show` bus events; S3 browser saw toast broadcast | ✅ |
+| 6 | Pending question signaled in dashboard: red ring + beep | `#red-ring` un-hidden while pendingQuestion true; WebAudio 880 Hz/150 ms on transition, gesture-unlocked | S3 dashboard results: ring hidden-attr evidence live during question; beep code-path shared with ring transition (audible verification not automatable) | ✅ (beep code verified, not audibly) |
+| 7 | Signal cleared when user answers | question.replied clears pendingQuestion; ring hidden again | S3: ring `hidden=""` after answer | ✅ |
+| 8 | Orchestrator writes todo plan (native todo mechanism) | `todowrite` tool used; plugin mirrors phase=plan | S2 B tasks/state | ✅ |
+| 9 | Subagents numbered (worker 1, 2, …) | state.json worker ids increment; boxes render #1/#2 | S2 B snapshots; S3 browser | ✅ |
+| 10 | Max parallel from config, default 5 | 8-task soak with maxParallel=5: max concurrent ≤5 | soak (validation loop output) | ✅ |
+| 11 | Parallel vs sequential at orchestrator's discretion | parallel: B (2 workers overlap OK with maxParallel 5); sequential: D (maxParallel 1, 0 overlaps from SSE intervals) | S2 B/D | ✅ |
+| 12 | Worker with hard task may spawn sub-subagents (depth 2) | explicit wide-audit task; caller→spawned map shows `gigga-worker-high -> general` chains | deleg | ✅ |
+| 13 | Tier models mapped from user's providers at first-run | guided wizard writes tiers + configured:true | S4 wizard transcript (PASS) | ✅ |
+| 14 | User picks default tier; orchestrator escalates per difficulty | wizard asks default tier; tier mix observed (low+medium+high in one run) | S4 wizard; S2/S4 caller maps (4×low, 6×medium, 2×high in compliance run) | ✅ |
+| 15 | Checker (read-only) sanity-check vs ORIGINAL request | `VERDICT: PASS/FAIL` + GAPS from gigga-checker task outputs | S2 B/C checker verdicts parsed from live task outputs | ✅ |
+| 16 | On FAIL: ask user OR autoRetry; retry fixes only gaps | ask path: S2 C (retry question answered); auto path: S4 E3 | S2 C, S4 session4 E3 | ✅ |
+| 17 | Auto-retry capped (≤2), no infinite loop | persistent-failure bait: 3 waves total (1+2) | S4 session4 E3: PASS | ✅ |
+| 18 | Manual fasttrack: /gigga-fasttrack command | command file routes to gigga-fasttrack + writes flag | commands/gigga-fasttrack.md; flag file observed in S3 | ✅ |
+| 19 | Manual fasttrack: dashboard glowing button | click → `✓ FASTTRACK ARMED` + flag file on disk | S3 browser evidence | ✅ |
+| 20 | Manual fasttrack: mid-questions escape hatch ("fasttrack") | answering a pending question with literal "fasttrack" routes to fasttrack | S4 focus E1: PASS | ✅ |
+| 21 | Sidebar: orchestrator box + one box per numbered subagent, clickable → that agent's message stream | click worker #1 box → main window shows its full conversation | S3 browser (twice: live + disk fallback) | ✅ |
+| 22 | Box states: working (animated border, reduced-motion fallback) / done / failed | CSS conic-gradient + @media prefers-reduced-motion static; done/failed badges | dashboard style snapshot states in S3/S4 (badges in DOM: `MEDIUM done`) | ✅ |
+| 23 | Overall progress stepper: read repo → questions → plan → execute → check → done | stepper elements + phaseIndex mapping; observed advancing | S3 browser; S2 B phase snapshots (recon→questions→executing→checking→done) | ✅ |
+| 24 | Beep works macOS/Linux/Windows; where terminal swallows it, README documents the one setting | `\x07` to /dev/tty (POSIX) + WebAudio in dashboard; README troubleshooting covers iTerm2/Terminal/Windows Terminal | README troubleshooting section; Linux verified in S2 | ✅ (macOS/Windows documented, not lab-tested — see platform matrix) |
+| 25 | One-line install from GitHub (curl \| bash) | REAL one-liner against pushed repo in a clean environment | clean install transcript | ✅ |
+| 26 | Works in TUI and dashboard app | TUI flows via serve/API (same agent paths); dashboard verified in browser | S2–S4 | ✅ |
+| 27 | Installer: idempotent, backups, never overwrites config | install twice → diff empty except timestamped backup; config preserved | S1 acceptance (rerun in clean transcript) | ✅ |
+| 28 | Uninstaller removes only GIGGA files, restores opencode.json | uninstall in sandbox: agents/commands/plugins emptied, backup restored | S1 + S4 uninstall sanity | ✅ |
+| 29 | Config schema (tiers/defaultTier/maxParallel/autoRetry/sound/questionRounds) | validateConfig enforces every field; invalid POST rejected 400 | unit tests; S3 config API test | ✅ |
+| 30 | Read-only recon/checker: NO write capability | permission edit/bash deny; tool list shrinks to read/grep/glob/webfetch/skill; blocked-write demonstrated | S1 gate 4; S4 regression read-only PASS | ✅ |
+| 31 | Per-project state (design correction) | distinct projects/<slug>-<hash>/state.json; dashboards read their own project | S4 focus E5: two files, dashboard A vs B | ✅ |
+| 32 | Interrupted runs marked failed (interrupted) | kill -9 → recovery on next load | S4 focus E2: PASS; soak phase 2 | ✅ |
+| 33 | questionRounds enforced end-to-end (plugin) | tool.execute.before empties question args at cap+1 | S4 session4 E8 + plugin log line | ✅ |
+| 34 | First-run detection (missing config / unconfigured) | orchestrator refuses and points to /gigga-setup | S4 regression first attempt ("Please run /gigga-setup") | ✅ |
+| 35 | Setup wizard: terminal + dashboard, same logic | gigga-config agent + dashboard both drive shared.mjs CLI | S4 wizard (agent) + S3 config screen; one implementation | ✅ |
+| 36 | 5-line cheat sheet after setup | CHEAT_SHEET constant rendered by wizard + dashboard | S4 wizard final; dashboard config save handler | ✅ |
+| 37 | Individual config edits ("change maxParallel to 8") | gigga-config agent prompt supports single-key edits via same CLI | agents/gigga-config.md (wizard + individual edits sections) | ✅ (prompt-level; exercised via CLI unit tests) |
+| 38 | gigga-config scope-limited (never touches project files) | bash permission: deny-all wildcard FIRST, then CLI/models allows (last-match-wins) | agents/gigga-config.md frontmatter; S4 wizard ran with scoped bash successfully | ✅ |
+| 39 | /gigga-status command | formats per-project state (phase, agents table, pending) | S4 session4 + focus status outputs | ✅ |
+| 40 | Phase toasts | planning / N workers running (M slots free) / checking / done / failed | plugin announcePhase; toast events on bus in S4 runs | ✅ |
+| 41 | Server.json discovery; dashboard degrades gracefully when server down | plugin writes server.json; dashboard health-checks, status-only mode with notice | S3: "status-only mode" note + disk-fallback messages | ✅ |
+| 42 | Dashboard config screen validates models against available providers | /api/config lists models from server/CLI; validateConfig cross-checks | unit + S3 invalid-POST test | ✅ |
+
+## Notes
+
+- Rows 6 (audible beep) and 24 (bell on macOS/Windows): code paths verified;
+  audible/platform behavior documented in README troubleshooting rather
+  than lab-tested — see the platform matrix in the session report.
+- Row 37: individual edits are agent-prompt-driven over the shared CLI; the
+  CLI paths themselves are unit-tested. Escalated as a minor gap if you want
+  a scripted transcript of a single-key edit conversation.
