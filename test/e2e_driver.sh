@@ -182,7 +182,8 @@ run_and_watch() {
   local sid="$1" t="$2" mode="$3" snap="${4:-}" waited=0 r C
   while [ "$waited" -lt "$t" ]; do
     if [ "$mode" != "none" ]; then r=$(reply_question "$sid" "$mode") && echo "$r"; fi
-    if [ -n "$snap" ] && [ ! -s "$snap" ] && grep -q '"phase": *"executing"' "$STATE" 2>/dev/null; then
+    if [ -n "$snap" ] && [ ! -s "$snap" ] && grep -q '"phase": *"executing"' "$STATE" 2>/dev/null \
+       && grep -q '"kind": *"worker"' "$STATE" 2>/dev/null && grep -q '"status": *"working"' "$STATE" 2>/dev/null; then
       cp "$STATE" "$snap"
     fi
     if [ "${GIGGA_WATCH_CONC:-0}" = "1" ]; then
@@ -196,7 +197,7 @@ print(sum(1 for a in s.get("agents", []) if a.get("kind") == "worker" and a.get(
       [ "$C" -gt "$MAXCONC" ] && MAXCONC=$C
     fi
     [ -n "$(is_idle "$sid")" ] && return 0
-    sleep 3; waited=$((waited+3))
+    sleep 2; waited=$((waited+2))
   done
   echo "TIMEOUT after ${t}s"
   return 1
@@ -240,7 +241,25 @@ for cid in order:
 ' "$1"
 }
 
-q_rounds() {
+q_rounds() { # interaction rounds ≈ gigga-recon invocations for the session
+  sse_json | python3 -c '
+import json, sys
+sid, n = sys.argv[1], 0
+for line in sys.stdin:
+    d = json.loads(line)
+    if d.get("type") != "message.part.updated": continue
+    p = d.get("properties", {})
+    part = p.get("part", {})
+    if part.get("type") != "tool" or part.get("tool") != "task": continue
+    if p.get("sessionID") != sid: continue
+    st = part.get("state", {})
+    if st.get("status") == "running" and st.get("input", {}).get("subagent_type") == "gigga-recon":
+        n += 1
+print(n)
+' "$1"
+}
+
+q_events() { # raw question.asked count (multiple can occur within one round)
   sse_json | python3 -c '
 import json, sys
 sid, n = sys.argv[1], 0
@@ -334,7 +353,7 @@ md "request: \`$B_REQ\`"
 prompt "$B_SID" "$B_REQ" >/dev/null
 run_and_watch "$B_SID" 600 first "$SB/b_snap1.json" > "$SB/b_answers.log"
 md "auto-answers during run:"; code "$(cat "$SB/b_answers.log")"
-md "question rounds: $(q_rounds "$B_SID") (expect ≤2)"
+md "question interaction rounds: $(q_rounds "$B_SID") (expect ≤2); raw question.asked events: $(q_events "$B_SID")"
 md "tasks spawned:"; code "$(tasks_for "$B_SID")"
 md "checker verdicts: $(checker_verdicts | tr '\n' ' ')"
 md "state snapshot DURING execution:"; code "$(cat "$SB/b_snap1.json" 2>/dev/null || echo "(missed — run too fast)")"
@@ -366,7 +385,7 @@ md 'session: $F_SID  request: `make the parsers better`'
 prompt "$F_SID" "make the parsers better" >/dev/null
 run_and_watch "$F_SID" 600 first >/dev/null
 F_Q=$(q_rounds "$F_SID")
-md "question rounds observed: $F_Q (must be ≤ 2)"
+md "question interaction rounds observed: $F_Q (must be ≤ 2); raw events: $(q_events "$F_SID")"
 md "final answer (assumptions expected):"; code "$(final_text "$F_SID")"
 if [ "$F_Q" -le 2 ]; then md "**F: PASS** — never entered a 3rd round"; else md "**F: FAIL** — a 3rd round was asked"; fi
 

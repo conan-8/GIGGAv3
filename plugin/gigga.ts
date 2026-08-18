@@ -119,22 +119,31 @@ async function writeState(s: RunState) {
     updatedAt: s.updatedAt,
   }
   const full = { ...pub, orchestrator: s.orchestrator, workerCounter: s.workerCounter, taskCalls: s.taskCalls, sessions: s.sessions, answeredQuestions: s.answeredQuestions }
-  await writeFile(STATE_TMP, JSON.stringify(full, null, 2) + "\n")
-  await rename(STATE_TMP, STATE_FILE) // atomic on POSIX
+  // unique tmp per write: concurrent plugin instances never rename each
+  // other's tmp file away (shared tmp caused ENOENT rename races)
+  const tmp = `${STATE_TMP}.${process.pid}.${Date.now()}${Math.random().toString(36).slice(2, 6)}`
+  await writeFile(tmp, JSON.stringify(full, null, 2) + "\n")
+  await rename(tmp, STATE_FILE) // atomic on POSIX
 }
 
 // Read-modify-write. `mutate` returns true if it changed anything; the
 // caller proceeds with side effects only when this instance's change landed.
 async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
-  try {
-    const s = await readState()
-    if (!mutate(s)) return false
-    await writeState(s)
-    return true
-  } catch (e) {
-    await log(`state update failed: ${String(e)}`)
-    return false
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const s = await readState()
+      if (!mutate(s)) return false
+      await writeState(s)
+      return true
+    } catch (e) {
+      if (attempt === 2) {
+        await log(`state update failed: ${String(e)}`)
+        return false
+      }
+      await new Promise((r) => setTimeout(r, 5 + Math.random() * 20))
+    }
   }
+  return false
 }
 
 async function bell() {
@@ -304,6 +313,19 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       if (st.status === "running") {
         const acted = await update((s) => {
           if (s.taskCalls[callID]) return false // already tracked (by any instance)
+          // idempotent even from a stale read: same parent+kind+task already
+          // present means another instance's write landed first
+          const task = String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200)
+          const dup = s.agents.some(
+            (a) =>
+              a.kind === cls.kind &&
+              a.parentSessionId === p.sessionID &&
+              a.task.slice(0, 60) === task.slice(0, 60),
+          )
+          if (dup) {
+            s.taskCalls[callID] = { entryIndex: -1, asked: true }
+            return false
+          }
           const parent = p.sessionID
           if (s.orchestrator !== parent) {
             // a new parent session spawning gigga tasks starts a new run

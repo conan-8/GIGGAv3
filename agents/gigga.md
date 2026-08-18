@@ -37,7 +37,8 @@ It returns a requirements brief (GOAL / CONTEXT FOUND IN REPO / UNKNOWNS /
 PROPOSED QUESTIONS or ASSUMPTIONS).
 
 - If recon proposes questions: relay them to the user with the `question`
-  tool (one question.asked per round, concise options). This is round 1.
+  tool, BATCHING all of the round's questions into a single question tool
+  call (concise options). This is round 1.
 - Apply the user's answers, then re-invoke `gigga-recon` with the answers.
   Recon may ask round 2 — relay it the same way. HARD CAP: `questionRounds`
   rounds total (default 2). NEVER ask a round 3. After the cap (or if recon
