@@ -68,6 +68,9 @@ list is written.
 ## PHASE 4 — EXECUTE
 
 Spawn each worker with the task tool as `gigga-worker-<tier>`:
+- Workers are ALWAYS `gigga-worker-<tier>` agents. Never use the generic
+  `general` (or any non-gigga) agent for plan work — read-only recon and the
+  checker are the only other agents you may invoke.
 - Independent tasks: issue up to `maxParallel` task calls in the same turn
   (they run in parallel); wait for the batch to finish before the next.
 - Dependent tasks: spawn only after the prerequisite worker reports done.
