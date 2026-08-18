@@ -18,6 +18,25 @@ agent pack via a one-line curl installer.
 - Beep must work on macOS, Linux, and Windows.
 - One-line install from GitHub (curl | bash). Works in both the opencode terminal TUI and the dashboard app.
 
+## Session-2 refinements (verified mechanisms, opencode 1.18.18)
+
+- Questions are asked with opencode's built-in `question` tool (options UI);
+  the plugin detects `question.asked` bus events and clears on
+  `question.replied`/`question.rejected`.
+- Pending-question signal: terminal bell = `\x07` written to `/dev/tty` by
+  the plugin (gated on config `sound`); toast = `POST /tui/show-toast` on
+  the opencode server (plugin uses its `serverUrl`).
+- Worker lifecycle: tracked from `message.part.updated` tool parts where
+  `tool === "task"` — `state.input.subagent_type` identifies the gigga agent
+  and tier, the completed `state.output` embeds the subagent session id.
+- Fasttrack forcing: `/gigga-fasttrack` writes
+  `~/.config/opencode/gigga/fasttrack.flag`; the orchestrator consumes and
+  deletes it at PHASE 1.
+- `state.json` (written atomically by the plugin, tmp+rename):
+  `{ phase: idle|recon|questions|plan|executing|checking|done|failed,
+     pendingQuestion, originalRequest, agents: [{id, kind, tier, task,
+     status, sessionId, parentSessionId}], updatedAt }`.
+
 ## Verified against opencode 1.18.18 (2026-08-18)
 
 - Custom agents: markdown in `~/.config/opencode/agents/`, frontmatter `description`, `mode` (primary|subagent|all), `model`, `permission` (per-key allow/ask/deny). Primary agents join the Tab cycle. ✔
