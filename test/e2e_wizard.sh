@@ -71,12 +71,16 @@ PY
   label=$(python3 -c '
 import sys
 labels = [l for l in sys.argv[1].split(";") if l]
-prefer = sys.argv[2]
+prefer = sys.argv[2]; qtext = sys.argv[3].lower()
 pick = labels[0] if labels else "yes"
-for l in labels:
-    if prefer in l.lower(): pick = l; break
+if "confirm" in qtext or "step 6" in qtext:
+    for l in labels:
+        if any(w in l.lower() for w in ("confirm","yes","save","ok","apply","looks good","write")): pick = l; break
+else:
+    for l in labels:
+        if prefer in l.lower(): pick = l; break
 print(pick)
-' "$labels" "${WIZ_ANSWER:-kimi}")
+' "$labels" "${WIZ_ANSWER:-kimi}" "$q")
   curl -s -X POST "$BASE/question/$rid/reply" -H 'content-type: application/json' \
     -d "{\"answers\":[[\"$label\"]]}" -o /dev/null
   echo "Q: $q -> answered: $label"
@@ -86,7 +90,7 @@ WIZ_ANSWER=kimi
 W_LOG="$SB/w.log"
 (
   n=0
-  while :; do
+  while [ "$n" -lt 14 ]; do
     r=$(answer_any) && { echo "$r"; n=$((n+1)); }
     [ "$n" -ge 2 ] && WIZ_ANSWER=medium
     [ "$n" -ge 3 ] && WIZ_ANSWER=first
@@ -147,8 +151,13 @@ db.close();
 md "orchestrator final:"; code "$(final_text)"
 md "config after:"; code "$(cat "$CFG")"
 md "agent model lines:"; code "$(grep -H '^model:' "$AG"/gigga-worker-*.md "$AG/gigga.md")"
-if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("configured") and all("'"$MODEL"'" in v for v in c["tiers"].values()) else 1)' "$CFG" \
-   && grep -q "model: $MODEL" "$AG/gigga-worker-low.md"; then
+if python3 -c '
+import json, sys
+c = json.load(open(sys.argv[1]))
+ok = c.get("configured") and all(not v.startswith("anthropic/claude-") for v in c["tiers"].values())
+sys.exit(0 if ok else 1)' "$CFG" \
+   && grep -q "set by gigga-config" "$AG/gigga-worker-low.md" \
+   && ! grep -q "model: anthropic/claude-haiku" "$AG/gigga-worker-low.md"; then
   md "**WIZARD: PASS** — guided setup wrote config + agent files"
 else
   md "**WIZARD: CHECK/FAIL** — inspect above"

@@ -15,6 +15,35 @@ agent pack via a one-line curl installer.
 - After all workers finish: checker agent (read-only) does a sanity check — is the user's original request sufficiently fulfilled? On failure: ask the user whether to retry, OR auto-retry if `autoRetry` was enabled during setup. Retry = orchestrator fixes only the gaps the checker found.
 - Manual fasttrack: user can force fasttrack during question answering and via a glowing sidebar button in the dashboard and via /gigga-fasttrack.
 - Sidebar UI (dashboard): orchestrator tab + one mini-box per numbered subagent; clicking a box shows that agent's thinking/progress in the main window like a tab; each box shows working (red/spinning border; plain color indicator acceptable) or done. Overall progress bar above the boxes: read repo → questions → plan → execute → check → done.
+
+## Session-4 refinements (as built)
+
+- **Per-project state** (design correction): run state lives at
+  `<cfgRoot>/gigga/projects/<slug>-<hash10>/state.json`, keyed by the
+  project/worktree dir — never in the global dir. The dashboard serves the
+  project of its CWD (`GIGGA_PROJECT_DIR` override) and shows it in the
+  footer. Legacy global state.json is renamed aside on plugin load.
+- **Interrupted runs**: working agents with no state update for 120 s are
+  marked `failed (interrupted)` (plugin on load, dashboard on read).
+- **questionRounds enforcement**: at the (cap+1)-th question tool call in a
+  gigga session the plugin empties the question args; the orchestrator then
+  proceeds with stated assumptions (prompt-instructed). Batching caveat: a
+  model issuing many single-question calls in one round can hit the cap
+  early (under-asking, never over-asking).
+- **Phase toasts**: planning / N workers running (M slots free) / checking /
+  done / failed-needs-retry.
+- **Setup**: first run detected via missing config or missing
+  `"configured": true`; `/gigga-setup` (gigga-config agent) and the
+  dashboard config screen share one implementation
+  (`dashboard/lib/shared.mjs`, also a CLI: validate/apply/models/status/
+  wizard). The wizard marks `configured: true`, rewrites agent model lines,
+  and shows a 5-line cheat sheet.
+- **gigga-config is scope-limited**: bash allows only the shared CLI and
+  `opencode models` (wildcard deny first — opencode uses last-match-wins).
+- **/gigga-status** command prints phase, agent table, pending-question
+  state for the current project.
+- Terminal worker navigation is native (`session_child_cycle` etc.);
+  documented in README, nothing auto-applied to tui.json.
 - Beep must work on macOS, Linux, and Windows.
 - One-line install from GitHub (curl | bash). Works in both the opencode terminal TUI and the dashboard app.
 

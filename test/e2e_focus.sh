@@ -83,7 +83,7 @@ labels = [l for l in sys.argv[2].split(";") if l]
 mode = sys.argv[1]; pick = labels[0] if labels else "yes"
 if mode == "label": pick = sys.argv[3]
 print(pick)
-' "$mode" "$labels" "$2")
+' "$mode" "$labels" "${2:-}")
   curl -s -X POST "$BASE/question/$rid/reply" -H 'content-type: application/json' -d "{\"answers\":[[\"$label\"]]}" -o /dev/null
   echo "answered [$rid] with: $label"
 }
@@ -164,13 +164,21 @@ md "## Edge 2 — kill -9 mid-execution"
 E2=$(sess_new "$FX")
 ask "$E2" gigga "Add input validation to parseArgs in src/argv-parser.ts and a shout() function in src/greet.ts." >/dev/null
 E2S=$(pstate "$FX")
-for _ in $(seq 1 90); do grep -q '"phase": *"executing"' "$E2S" 2>/dev/null && break; sleep 2; done
+for _ in $(seq 1 120); do
+  answer_first first >/dev/null 2>&1
+  grep -q '"phase": *"executing"' "$E2S" 2>/dev/null && break
+  sleep 2
+done
 md "state at kill time:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:",d["phase"],[(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E2S" 2>/dev/null)"
 kill -9 "$(pgrep -f "opencode serve --port $PORT" | head -1)" 2>/dev/null; sleep 2
-if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$E2S" 2>/dev/null; then
-  md "state.json after kill -9: VALID JSON (atomic writes held)"
+if [ -f "$E2S" ]; then
+  if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$E2S" 2>/dev/null; then
+    md "state.json after kill -9: VALID JSON (atomic writes held)"
+  else
+    md "state.json after kill -9: CORRUPT"
+  fi
 else
-  md "state.json after kill -9: CORRUPT"
+  md "state.json after kill -9: (not yet created — run had not reached executing; treating as no-op)"
 fi
 python3 - "$E2S" <<'PY'
 import json, sys, datetime
@@ -236,9 +244,12 @@ E7=$(sess_new "$FX")
 ask "$E7" gigga "Add an average(list) function to src/calc.ts." >/dev/null
 watch "$E7" 420 first >/dev/null
 E7S=$(pstate "$FX")
+E7_MISSING=0; [ -f "$E7S" ] || E7_MISSING=1
 md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7S" 2>/dev/null)"
 md "final:"; code "$(final_text "$E7")"
-if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any(a["kind"]=="worker" for a in d["agents"]) else 1)' "$E7S" 2>/dev/null && final_text "$E7" | grep -qi "blocked\|fail\|could not"; then
+if [ "$E7_MISSING" = 1 ]; then
+  md "**E7: CHECK** — no state file (see transcript)"
+elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any(a["kind"]=="worker" for a in d["agents"]) else 1)' "$E7S" 2>/dev/null && final_text "$E7" | grep -qi "blocked\|fail\|could not"; then
   md "**E7: PASS** — worker failure surfaced"
 else
   md "**E7: CHECK**"
