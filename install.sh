@@ -89,10 +89,10 @@ exec "${GIGGA_DASHBOARD_NODE:-node}" "$HOME/.config/opencode/GIGGA/dashboard/ser
 LAUNCHER
     chmod +x "$BIN_DIR/GIGGA-dashboard"
     case ":$PATH:" in
-      *":$BIN_DIR:"*) ;;
-      *) msg "NOTE: $BIN_DIR is not on your PATH — add it to use the 'GIGGA-dashboard' command:" ;;
+      *":$BIN_DIR:"*) msg "      GIGGA-dashboard command installed (already on PATH)" ;;
+      *) msg "NOTE: $BIN_DIR is not on your PATH — add it to use the 'GIGGA-dashboard' command:"
+         msg "      export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
     esac
-    msg "      export PATH=\"\$HOME/.local/bin:\$PATH\""
   else
     msg "Could not write $BIN_DIR — start the dashboard with:"
     msg "  node $GIGGA_DIR/dashboard/server.mjs"
@@ -176,9 +176,11 @@ else
 fi
 
 # ------------------------------------------------------------- next steps --
+AGENT_COUNT=$(ls "$GIGGA_HOME/agents"/GIGGA*.md 2>/dev/null | wc -l | tr -d ' ')
+CMD_COUNT=$(ls "$GIGGA_HOME/commands"/GIGGA-*.md 2>/dev/null | wc -l | tr -d ' ')
 msg ""
 msg "GIGGA installed into $GIGGA_HOME:"
-msg "  agents/    (8 agents)   commands/ (4 commands)   plugins/GIGGA.ts"
+msg "  agents/    ($AGENT_COUNT agents)   commands/ ($CMD_COUNT commands)   plugins/GIGGA.ts"
 msg "  GIGGA/GIGGA.config.json"
 msg ""
 msg "Next steps:"
