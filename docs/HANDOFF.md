@@ -4,7 +4,7 @@
 
 ```
 user ── opencode (TUI or `opencode serve`)
-        └─ gigga (primary agent, agents/gigga.md)      ← state machine, never codes
+        └─ GIGGA (primary agent, agents/GIGGA.md — all-caps, red)      ← state machine, never codes
            ├─ gigga-recon      read-only briefs + ≤N question rounds
            ├─ gigga-worker-low/medium/high              numbered executors
            │    └─ (optional sub-subagents, needs permission.task: allow)

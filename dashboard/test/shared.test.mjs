@@ -54,7 +54,7 @@ test("applyTierModels rewrites worker markers and orchestrator model", async () 
       `---\ndescription: worker ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by gigga-config -->\n---\nbody\n`,
     )
   }
-  await writeFile(join(dir, "gigga.md"), `---\ndescription: orch\nmode: primary\ncolor: accent\n---\nbody\n`)
+  await writeFile(join(dir, "GIGGA.md"), `---\ndescription: orch\nmode: primary\ncolor: accent\n---\nbody\n`)
 
   const res = await applyTierModels(dir, { low: "kimi/k3", medium: "kimi/k3", high: "opencode/big-pickle" }, "medium")
   assert.equal(res.filter((r) => r.changed).length, 4)
@@ -63,7 +63,7 @@ test("applyTierModels rewrites worker markers and orchestrator model", async () 
   assert.match(low, /^model: kimi\/k3   # <!-- set by gigga-config -->$/m)
   const high = await readFile(join(dir, "gigga-worker-high.md"), "utf8")
   assert.match(high, /^model: opencode\/big-pickle   # <!-- set by gigga-config -->$/m)
-  const orch = await readFile(join(dir, "gigga.md"), "utf8")
+  const orch = await readFile(join(dir, "GIGGA.md"), "utf8")
   assert.match(orch, /^model: kimi\/k3$/m)
 
   // idempotent second run

@@ -236,7 +236,7 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
   if (!sessionID) return false
   if (sessionID === s.orchestrator) return true
   const info = s.sessions[sessionID]
-  if (info?.agent?.startsWith("gigga")) return true
+  if (info?.agent?.toLowerCase().startsWith("gigga")) return true
   if (info?.parent && info.parent === s.orchestrator) return true
   return false
 }
@@ -373,7 +373,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         if (info.parentID) next.parent = info.parentID
         if (JSON.stringify(cur) === JSON.stringify(next)) return false
         s.sessions[info.id] = next
-        if (next.agent?.startsWith("gigga") && next.parent) {
+        if (next.agent?.toLowerCase().startsWith("gigga") && next.parent) {
           const entry = s.agents.find(
             (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
           )

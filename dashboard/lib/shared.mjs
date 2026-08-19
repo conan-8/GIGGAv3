@@ -119,9 +119,9 @@ export async function applyTierModels(agentsDir, tiers, defaultTier) {
     const res = await rewriteModelLine(file, `model: ${tiers[tier]}   # <!-- set by gigga-config -->`)
     results.push({ file: `gigga-worker-${tier}.md`, ...res })
   }
-  const orch = join(agentsDir, "gigga.md")
+  const orch = join(agentsDir, "GIGGA.md")
   const res = await rewriteModelLine(orch, `model: ${tiers[defaultTier]}`, { afterKey: "mode" })
-  results.push({ file: "gigga.md", ...res })
+  results.push({ file: "GIGGA.md", ...res })
   return results
 }
 

@@ -3,7 +3,7 @@
 GIGGA is an orchestrator agent system for opencode. It installs as a plugin +
 agent pack via a one-line curl installer.
 
-- Primary agent `gigga` (orchestrator), Tab-switchable like opencode's Plan/Build agents.
+- Primary agent `GIGGA` (orchestrator; file agents/GIGGA.md, shown all-caps/red), Tab-switchable like opencode's Plan/Build agents.
 - Flow: user prompt → orchestrator classifies:
   - Simple recon question or one-step task → route directly to fasttrack agent, answer, done.
   - Everything else → call recon agent (read-only): inspect repo + user request, then ask the user clarifying questions, MAX 2 ROUNDS of questions. If still ambiguous after 2 rounds, proceed with explicitly stated assumptions.

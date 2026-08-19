@@ -98,7 +98,7 @@ test("CLI wizard writes config + agent models + marks configured", async () => {
       `---\ndescription: w ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by gigga-config -->\n---\nbody\n`,
     )
   }
-  await writeFile(join(root, "agents", "gigga.md"), `---\ndescription: o\nmode: primary\n---\nbody\n`)
+  await writeFile(join(root, "agents", "GIGGA.md"), `---\ndescription: o\nmode: primary\n---\nbody\n`)
   const cfg = { ...validCfg(), tiers: { low: "kimi/k3", medium: "kimi/k3", high: "kimi/k3" } }
   const { stdout } = await run(process.execPath, [SHARED, "wizard", root, JSON.stringify(cfg)])
   const out = JSON.parse(stdout)

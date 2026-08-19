@@ -202,7 +202,7 @@ md "config before: $(python3 -c 'import json; c=json.load(open("'"$CFG"'")); pri
 W_SID=$(sess_new "$FX")
 md "session: $W_SID — request: \`Set up GIGGA now — run the setup wizard.\`"
 curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Set up GIGGA now — run the setup wizard with me."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Set up GIGGA now — run the setup wizard with me."}]}' -o /dev/null
 W_LOG="$SB/wizard.log"
 (
   while :; do
@@ -229,7 +229,7 @@ else
   # one retry: nudge the orchestrator to actually run the wizard agent
   md "wizard incomplete — nudging once (spawn gigga-config now)"
   curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
-    -d '{"agent":"gigga","parts":[{"type":"text","text":"Continue the setup wizard NOW: spawn the gigga-config agent in this turn and complete configuration with me."}]}' -o /dev/null
+    -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Continue the setup wizard NOW: spawn the gigga-config agent in this turn and complete configuration with me."}]}' -o /dev/null
   (
     while :; do
       reply_question "$W_SID" kimi && continue
@@ -259,7 +259,7 @@ md ""
 md "## Edge 1 — answer a pending question with 'fasttrack'"
 E1_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E1_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add a CSV export function to lib/parser.js and document it in README.md."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add a CSV export function to lib/parser.js and document it in README.md."}]}' -o /dev/null
 # answer the first pending question with the literal label fasttrack
 for _ in $(seq 1 60); do
   r=$(reply_question "$E1_SID" "label:fasttrack")
@@ -282,7 +282,7 @@ md ""
 md "## Edge 2 — kill -9 mid-execution: state intact + stale recovery"
 E2_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E2_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add input validation to parseArgs in src/argv-parser.ts and a shout() function in src/greet.ts."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add input validation to parseArgs in src/argv-parser.ts and a shout() function in src/greet.ts."}]}' -o /dev/null
 E2STATE=$(pstate "$FX")
 for _ in $(seq 1 90); do
   grep -q '"phase": *"executing"' "$E2STATE" 2>/dev/null && break
@@ -329,7 +329,7 @@ bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
 start_server
 E3_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E3_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Two things: add input validation to parseConfig in lib/parser.js, and add a JSDoc block above it."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two things: add input validation to parseConfig in lib/parser.js, and add a JSDoc block above it."}]}' -o /dev/null
 watch "$E3_SID" 480 first >/dev/null
 E3_WAVES=$(tasks_for "$E3_SID" | grep -c gigga-worker)
 md "worker spawns (initial + retries): $E3_WAVES (must be ≤ 3 = 1 + 2 auto-retries)"
@@ -348,7 +348,7 @@ json.dump(c, open(p, "w"), indent=2)
 PY
 E4_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E4_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Two independent changes: add a round() helper to src/calc.ts; add a farewell(name) function to src/greet.ts."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two independent changes: add a round() helper to src/calc.ts; add a farewell(name) function to src/greet.ts."}]}' -o /dev/null
 watch "$E4_SID" 420 first >/dev/null
 E4_TASKS=$(tasks_for "$E4_SID"); E4_W=$(echo "$E4_TASKS" | grep -c gigga-worker)
 md "workers spawned: $E4_W (maxParallel=10)"; code "$E4_TASKS"
@@ -362,9 +362,9 @@ FX2="$SB/fx2"; mk_fixture "$FX2" --git
 E5A=$(sess_new "$FX")
 E5B=$(sess_new "$FX2")
 curl -s -X POST "$BASE/session/$E5A/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add a clamp(a,min,max) helper to src/calc.ts."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add a clamp(a,min,max) helper to src/calc.ts."}]}' -o /dev/null
 curl -s -X POST "$BASE/session/$E5B/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add a slug() function to lib/util.js."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add a slug() function to lib/util.js."}]}' -o /dev/null
 watch "$E5A" 300 none >/dev/null 2 & watch "$E5B" 300 none >/dev/null 2 &
 sleep 60; kill %1 %2 2>/dev/null
 S1=$(pstate "$FX"); S2=$(pstate "$FX2")
@@ -389,7 +389,7 @@ md "## Edge 6 — request in a non-git directory"
 FX3="$SB/fx3"; mk_fixture "$FX3"
 E6_SID=$(sess_new "$FX3")
 curl -s -X POST "$BASE/session/$E6_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add a lerp(a,b,t) function to src/calc.ts."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add a lerp(a,b,t) function to src/calc.ts."}]}' -o /dev/null
 watch "$E6_SID" 300 first >/dev/null
 md "checker verdicts: $(checker_verdicts | tr '\n' ' ')"
 md "final:"; code "$(final_text "$E6_SID")"
@@ -406,7 +406,7 @@ bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
 start_server
 E7_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E7_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
 watch "$E7_SID" 360 first >/dev/null
 E7STATE=$(pstate "$FX")
 md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7STATE" 2>/dev/null)"
@@ -430,7 +430,7 @@ bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
 start_server
 E8_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E8_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"improve the parsers somehow"}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"improve the parsers somehow"}]}' -o /dev/null
 watch "$E8_SID" 480 first >/dev/null
 E8_Q=$(q_events_for "$E8_SID")
 md "question.asked events: $E8_Q (must be ≤ 1 with questionRounds=1 + plugin cap)"

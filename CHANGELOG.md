@@ -27,6 +27,10 @@ First tagged release. Full spec implemented and audited
 - Test suite: 17 unit tests + scripted E2E (scenarios A–F, edges, soak,
   compliance evidence) with real transcripts under test/results/.
 
+### Changed
+- Orchestrator agent renamed `gigga` → `GIGGA` (all-caps, red #f7768e in the
+  Tab cycle); all internal references updated and re-verified.
+
 ### Known limitations
 - The question-round cap counts question-tool calls, not interaction
   rounds — a model issuing many calls in one round can be silenced early

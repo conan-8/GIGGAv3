@@ -42,7 +42,7 @@ W_SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' \
   -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 md "session: $W_SID"
 curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga","parts":[{"type":"text","text":"Set up GIGGA now — run the setup wizard with me."}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Set up GIGGA now — run the setup wizard with me."}]}' -o /dev/null
 
 # answer ANY pending question from any gigga session (wizard asks from its subagent session)
 answer_any() {

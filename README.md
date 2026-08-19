@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/conan-8/GIGGAv3/main/install.sh | b
 Then:
 
 1. Restart opencode.
-2. Press **Tab** to switch to the `gigga` agent (next to Plan/Build).
+2. Press **Tab** to switch to the `GIGGA` agent (next to Plan/Build).
 3. First request → GIGGA walks you through `/gigga-setup` (pick tier models
    from your own providers, maxParallel, autoRetry, sound).
 
@@ -35,7 +35,7 @@ opencode.json backup).
 
 ## Features
 
-- **gigga** orchestrator primary agent — Tab-switchable; does the planning,
+- **GIGGA** orchestrator primary agent — Tab-switchable, all-caps and red in the agent picker; does the planning,
   not the coding.
 - **Read-only recon** (`gigga-recon`) inspects your repo and asks clarifying
   questions (≤ `questionRounds` rounds — enforced by the plugin, which

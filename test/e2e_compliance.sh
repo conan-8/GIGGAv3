@@ -102,7 +102,7 @@ print(t[-1] if t else "(none)")
 md ""
 md "## Sub-subagent delegation (subagent_depth: 2)"
 SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga","parts":[{"type":"text","text":"Audit every module in lib/ and src/: one worker per area, and each worker MUST use its own sub-subagents (you have subagent_depth 2) to search the files in parallel — instruct them explicitly to do so. Deliverable: a table of module -> exported functions. This is a wide search task; delegation is required, not optional."}]}' -o /dev/null
+curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Audit every module in lib/ and src/: one worker per area, and each worker MUST use its own sub-subagents (you have subagent_depth 2) to search the files in parallel — instruct them explicitly to do so. Deliverable: a table of module -> exported functions. This is a wide search task; delegation is required, not optional."}]}' -o /dev/null
 W=0
 while [ $W -lt 600 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 md "final:"; code "$(ft "$SID")"
@@ -135,7 +135,7 @@ if [ "${GC:-0}" -ge 1 ]; then md "**DELEGATION: PASS**"; else md "**DELEGATION: 
 md ""
 md "## Tier selection by difficulty"
 TIER_SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$TIER_SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga","parts":[{"type":"text","text":"Two changes: (1) trivial: add a minus(a,b) function to src/calc.ts; (2) hard: refactor lib/mod1.js through lib/mod12.js into a single consolidated module with a compatibility shim re-exporting every helper, keeping all imports working — use a high-tier worker for the hard one."}]}' -o /dev/null
+curl -s -X POST "$BASE/session/$TIER_SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two changes: (1) trivial: add a minus(a,b) function to src/calc.ts; (2) hard: refactor lib/mod1.js through lib/mod12.js into a single consolidated module with a compatibility shim re-exporting every helper, keeping all imports working — use a high-tier worker for the hard one."}]}' -o /dev/null
 W=0
 while [ $W -lt 600 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$TIER_SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 TIERS_USED=$(python3 - "$SSE" <<'PY'

@@ -13,7 +13,7 @@ msg() { printf '%s\n' "$*"; }
 rm -rf "$GIGGA_HOME/gigga"
 
 # Remove GIGGA agents/commands/plugin (only files GIGGA owns).
-for f in gigga gigga-recon gigga-fasttrack gigga-checker gigga-config \
+for f in GIGGA gigga-recon gigga-fasttrack gigga-checker gigga-config \
          gigga-worker-low gigga-worker-medium gigga-worker-high; do
   rm -f "$GIGGA_HOME/agents/$f.md"
 done

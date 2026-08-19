@@ -10,7 +10,7 @@ One row per requirement from SPEC.md. Evidence key:
 
 | # | requirement (SPEC.md) | how verified | evidence | status |
 |---|---|---|---|---|
-| 1 | Primary agent `gigga`, Tab-switchable like Plan/Build | `mode: primary` in agents/gigga.md; server `/agent` lists gigga as primary; sessions run with agent=gigga | S2 (agent list output), all scenario transcripts | ✅ |
+| 1 | Primary agent `GIGGA` (all-caps, red #f7768e), Tab-switchable like Plan/Build | `mode: primary` in agents/GIGGA.md; server `/agent` lists `GIGGA \| primary \| color: #f7768e`; sessions run with agent=GIGGA (rename verified 2026-08-19) | S2 outputs + rename verification (session ran under GIGGA) | ✅ |
 | 2 | Simple question / one-step task → fasttrack directly, answer, done | scenario A: `gigga-fasttrack` task spawned, no recon, direct answer | S2/S4 `regression` A: PASS | ✅ |
 | 3 | Everything else → read-only recon inspects repo + request | task streams show `gigga-recon` invoked before workers | S2 B, S4 regression B | ✅ |
 | 4 | Clarifying questions, MAX 2 rounds; then explicit assumptions | recon invoked ≤2× per run; assumptions quoted in finals; plugin cap enforcement | S4 session4 E8 (questionRounds=1 held); S4 regression F PASS; cap log line in plugin events.log | ✅ |

@@ -83,7 +83,7 @@ PY
 }
 md "## E7 — worker fails mid-task (sabotaged worker reports blocked)"
 SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
+curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
 W=0
 while [ $W -lt 420 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 ST=$(python3 -c '

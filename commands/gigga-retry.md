@@ -1,6 +1,6 @@
 ---
 description: GIGGA retry — fix only the gaps the checker reported, then re-check
-agent: gigga
+agent: GIGGA
 ---
 
 The last check FAILED. Go directly to PHASE 4b: re-read the checker's last

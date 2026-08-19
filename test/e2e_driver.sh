@@ -115,7 +115,7 @@ sess_new() {
 
 prompt() { # prompt <sid> <text>
   curl -s -X POST "$BASE/session/$1/prompt_async" -H 'content-type: application/json' \
-    -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"gigga","parts":[{"type":"text","text":sys.argv[1]}]}))' "$2")" \
+    -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA","parts":[{"type":"text","text":sys.argv[1]}]}))' "$2")" \
     -o /dev/null -w "%{http_code}"
 }
 

@@ -88,7 +88,7 @@ ST=$(pstate "$FX")
 SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 
 md "request: 8 independent one-file tasks (fill src/slot1..8.ts with real helpers)"
-curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga","parts":[{"type":"text","text":"Eight independent tasks, one per file — fill each src/slot1.ts … src/slot8.ts with a small, working, exported utility function (square, cube, isEven, isOdd, abs, sign, clampTo10, negate respectively). No task depends on another; parallelize the workers."}]}' -o /dev/null
+curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Eight independent tasks, one per file — fill each src/slot1.ts … src/slot8.ts with a small, working, exported utility function (square, cube, isEven, isOdd, abs, sign, clampTo10, negate respectively). No task depends on another; parallelize the workers."}]}' -o /dev/null
 
 # poll: answer questions, validate JSON every tick, track concurrency
 POLLS=0; BADJSON=0; MAXCONC=0; PHASES=""
@@ -130,7 +130,7 @@ fi
 md ""
 md "## kill -9 mid-run + restart + dashboard honesty"
 KSID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$KSID/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga","parts":[{"type":"text","text":"Eight more independent tasks: extend each src/slot1..8.ts with a second exported function (double, triple, isPositive, isNegative, max0, min0, wrap10, invert)."}]}' -o /dev/null
+curl -s -X POST "$BASE/session/$KSID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Eight more independent tasks: extend each src/slot1..8.ts with a second exported function (double, triple, isPositive, isNegative, max0, min0, wrap10, invert)."}]}' -o /dev/null
 for _ in $(seq 1 120); do
   ans >/dev/null 2>&1
   grep -q '"kind": *"worker"' "$ST" 2>/dev/null && grep -q '"status": *"working"' "$ST" 2>/dev/null && break

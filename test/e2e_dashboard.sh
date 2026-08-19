@@ -70,7 +70,7 @@ case "$cmd" in
     SB=$(cat $SB_FILE); SESS=$(cat "$SB/session")
     curl -s -X POST "http://127.0.0.1:${GIGGA_DASH_OC_PORT:-4470}/session/$SESS/prompt_async" \
       -H 'content-type: application/json' \
-      -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"gigga","parts":[{"type":"text","text":sys.argv[1]}]}))' "$2")" \
+      -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA","parts":[{"type":"text","text":sys.argv[1]}]}))' "$2")" \
       -o /dev/null -w "prompt: %{http_code}\n" ;;
   answer)
     SB=$(cat $SB_FILE)
