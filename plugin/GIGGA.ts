@@ -66,6 +66,8 @@ interface AgentEntry {
   status: "working" | "done" | "failed"
   sessionId: string | null
   parentSessionId: string
+  startedAt?: string
+  endedAt?: string
 }
 
 interface RunState {
@@ -81,6 +83,9 @@ interface RunState {
   answeredQuestions: Record<string, boolean>
   questionCalls: Record<string, number>
   retries: number
+  runStartedAt?: string
+  doneAt?: string
+  failReason?: "error" | "interrupted"
 }
 
 const freshState = (): RunState => ({
@@ -96,6 +101,9 @@ const freshState = (): RunState => ({
   answeredQuestions: {},
   questionCalls: {},
   retries: 0,
+  runStartedAt: undefined,
+  doneAt: undefined,
+  failReason: undefined,
 })
 
 let serverUrl: URL | null = null
@@ -147,6 +155,9 @@ async function writeState(s: RunState) {
     answeredQuestions: s.answeredQuestions,
     questionCalls: s.questionCalls,
     retries: s.retries,
+    runStartedAt: s.runStartedAt,
+    doneAt: s.doneAt,
+    failReason: s.failReason,
   }
   const tmp = `${STATE_TMP}.${process.pid}.${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   await writeFile(tmp, JSON.stringify(full, null, 2) + "\n")
@@ -229,15 +240,14 @@ async function toast(message: string, variant: "info" | "warning" | "error" | "s
 }
 
 // TUI sidebar integration (verified opencode 1.18.18, DEVIATIONS #27): the
-// sidebar (ctrl+x b) lists sessions by title, so GIGGA titles its sessions
-// like dashboard boxes: "⚡ GIGGA · request", "GIGGA #2 (M) · task", "✓ …".
+// sidebar (ctrl+x b) lists sessions by title, and titles are live-updatable.
 async function setTitle(sessionID: string | null | undefined, title: string) {
   if (!serverUrl || !sessionID) return
   try {
     const res = await fetch(new URL(`session/${sessionID}`, serverUrl), {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: title.slice(0, 70) }),
+      body: JSON.stringify({ title: Array.from(title).slice(0, 70).join("") }), // split by code point — never cut an emoji
     })
     if (!res.ok) await log(`setTitle: HTTP ${res.status}`)
   } catch (e) {
@@ -245,35 +255,161 @@ async function setTitle(sessionID: string | null | undefined, title: string) {
   }
 }
 
-const shortTask = (s: string) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 40)
+const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
 
-function sidebarTitle(entry: { kind: string; id: number; tier: Tier; task: string }, done?: "✓" | "✗") {
-  const prefix = done ? `${done} ` : ""
-  if (entry.kind === "worker") {
-    const t = entry.tier ? `(${entry.tier[0].toUpperCase()})` : ""
-    return `${prefix}GIGGA #${entry.id} ${t} · ${shortTask(entry.task)}`
-  }
-  return `${prefix}GIGGA ${entry.kind} · ${shortTask(entry.task)}`
+// ------------------------------------------------ TUI sidebar tree render --
+// The TUI sidebar cannot render widgets, but every session row's TITLE is
+// live-updatable. GIGGA renders an animated tree (pure-title format):
+// - orchestrator row: 6-step phase bar with a pulsing current step, plus one
+//   traffic-light dot per subagent (🟢 done · ❌ failed · 🟡 running · 🔴
+//   spawning), re-sorted live;
+// - child rows: `├─`/`└─` connector, status dot, braille spinner while
+//   running, and for workers a time-budget bar (elapsed vs tier budget
+//   H 20m · M 10m · L 5m) with a ticking m:ss clock; frozen as
+//   `✓ m:ss` / `✗ m:ss` when finished. Dots are emoji so they keep their
+//   native red/yellow/green in the plain-text title.
+// A 1s sweep PATCHes all rows in one pass; spinner phase, step pulse and the
+// done-flash derive from wall-clock time, so concurrent plugin instances
+// compute identical titles (no flapping). Pure helpers are exported for the
+// sidebar-format conformance test.
+export const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+const PHASE_STEPS: Record<string, number> = {
+  idle: 0, recon: 1, questions: 2, plan: 3, executing: 4, checking: 5, done: 6, failed: 4,
+}
+const PHASE_WORD: Record<string, string> = {
+  recon: "RECON", questions: "QUESTIONS", plan: "PLAN", executing: "EXECUTE", checking: "CHECK",
+}
+const TIER_BUDGET_MS: Record<string, number> = { high: 20 * 60_000, medium: 10 * 60_000, low: 5 * 60_000 }
+
+export function fmtClock(ms: number): string {
+  const t = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(t / 3600)
+  const m = Math.floor((t % 3600) / 60)
+  const s = t % 60
+  return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`
 }
 
-// Mark the orchestrator's own sidebar row as finished (prefix ✓) so every
-// completed run is visually closed and a new GIGGA session reads as the
-// live group. Keeps opencode's auto-summary as the text.
-async function markOrchestratorDone(sessionID: string | null | undefined) {
-  if (!serverUrl || !sessionID) return
-  try {
-    const res = await fetch(new URL(`session/${sessionID}`, serverUrl), { signal: AbortSignal.timeout(1500) })
-    if (!res.ok) return
-    const cur = await res.json()
-    const title: string = cur?.title ?? "GIGGA run"
-    if (title.startsWith("✓") || title.startsWith("✗")) return
-    const s = await readState()
-    const cleaned = title.replace(/^GIGGA \[[^\]]*\]\s*\S*/, "").trim() // drop our live bar + suffix
-    const summary = shortTask(s.originalRequest || cleaned || title)
-    await setTitle(sessionID, `✓ GIGGA [${progressBar(6)}] done · ${summary || "run finished"}`)
-  } catch (e) {
-    await log(`markOrchestratorDone failed: ${String(e)}`)
+function elapsedMs(a: AgentEntry): number | null {
+  if (!a.startedAt) return null
+  const d = (a.endedAt ? Date.parse(a.endedAt) : Date.now()) - Date.parse(a.startedAt)
+  return isFinite(d) ? Math.max(0, d) : null
+}
+
+export function dotOf(a: AgentEntry): string {
+  if (a.status === "done") return "🟢"
+  if (a.status === "failed") return "❌"
+  return a.sessionId ? "🟡" : "🔴"
+}
+
+const dotRank = (a: AgentEntry) => (a.status === "done" ? 0 : a.status === "failed" ? 1 : a.sessionId ? 2 : 3)
+
+export function orchBar(phase: string, sec: number): string {
+  const step = PHASE_STEPS[phase] ?? 0
+  if (phase === "done") return "▓".repeat(6)
+  if (phase === "failed" || step === 0) return "▓".repeat(step) + "░".repeat(6 - step)
+  return "▓".repeat(step - 1) + (sec % 2 ? "▒" : "▓") + "░".repeat(6 - step)
+}
+
+export function budgetBar(a: { tier: Tier }, ms: number): string {
+  const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
+  if (!budget) return ""
+  const cells = Math.max(1, Math.min(5, Math.ceil((ms / budget) * 5)))
+  return "▓".repeat(cells) + "░".repeat(5 - cells)
+}
+
+export function orchestratorTitle(s: RunState, sec: number, flash = false): string {
+  if (s.phase === "failed") {
+    return s.failReason === "interrupted" ? "✗ GIGGA ▓▓▓▓░░ interrupted" : "✗ GIGGA ▓▓▓▓░░ failed — /GIGGA-retry"
   }
+  if (s.phase === "done") {
+    const ws = s.agents.filter((a) => a.kind === "worker")
+    const dur = s.runStartedAt && s.doneAt ? ` · ${fmtClock(Date.parse(s.doneAt) - Date.parse(s.runStartedAt))}` : ""
+    return `${flash ? "🎉" : "✓"} GIGGA ▓▓▓▓▓▓ done${dur} · ${ws.length} worker${ws.length === 1 ? "" : "s"}`
+  }
+  const dots = s.agents
+    .filter((a) => a.kind !== "orchestrator")
+    .sort((x, y) => dotRank(x) - dotRank(y))
+    .slice(0, 10)
+    .map(dotOf)
+    .join("")
+  const word = s.phase === "questions" && s.pendingQuestion ? "QUESTIONS — waiting for you" : PHASE_WORD[s.phase] ?? s.phase.toUpperCase()
+  return dots ? `⚡ GIGGA ${orchBar(s.phase, sec)} · ${dots} ${word}` : `⚡ GIGGA ${orchBar(s.phase, sec)} ${word}`
+}
+
+export function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, sec: number): string {
+  const conn = isLast ? "└─" : "├─"
+  const name = a.kind === "worker" ? `#${a.id} ${shortTask(a.task, 22)}` : `${a.kind} ${shortTask(a.task, 18)}`
+  if (a.status !== "working") {
+    const clock = elapsedMs(a)
+    return `${conn} ${dotOf(a)} ${name} ${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}${a.status === "failed" && s.retries > 0 ? " · retry" : ""}`
+  }
+  const spin = SPINNER[(sec + idx) % SPINNER.length]
+  const ms = elapsedMs(a)
+  if (a.kind === "worker" && a.tier && ms != null) return `${conn} 🟡 ${name} ${spin} ${budgetBar(a, ms)} ${fmtClock(ms)}`
+  return `${conn} 🟡 ${name} ${spin}${ms != null ? ` · ${fmtClock(ms)}` : ""}`
+}
+
+async function renderSidebar(s: RunState, flash = false) {
+  if (!s.orchestrator || !serverUrl) return
+  const sec = Math.floor(Date.now() / 1000)
+  const rows = s.agents.filter((a) => a.kind !== "orchestrator" && a.sessionId)
+  await Promise.all([
+    patchTitle(s.orchestrator, orchestratorTitle(s, sec, flash)),
+    ...rows.map((a, i) => patchTitle(a.sessionId!, childTitle(s, a, i, i === rows.length - 1, sec))),
+  ])
+}
+
+// ---- 1s sweep: one batched pass over every row title; PATCHes only rows
+// whose title changed since the last pass; renders finals and stops itself
+// when the run is done/failed (the done state keeps ticking ~1.6s to flash
+// 🎉 before settling to ✓).
+let sweepTimer: ReturnType<typeof setInterval> | null = null
+let lastSweepError = ""
+const lastTitles = new Map<string, string>()
+
+async function patchTitle(sessionID: string, title: string) {
+  if (lastTitles.get(sessionID) === title) return
+  await setTitle(sessionID, title)
+  lastTitles.set(sessionID, title)
+}
+
+function stopSweep() {
+  if (sweepTimer) clearInterval(sweepTimer)
+  sweepTimer = null
+  lastTitles.clear()
+}
+
+async function sweepTick(pre?: RunState) {
+  const s = pre ?? (await readState())
+  if (!s.orchestrator) return stopSweep()
+  if (s.phase === "failed") {
+    await renderSidebar(s)
+    return stopSweep()
+  }
+  if (s.phase === "done") {
+    const flash = !!(s.doneAt && Date.now() - Date.parse(s.doneAt) < 1600)
+    await renderSidebar(s, flash)
+    if (!flash) stopSweep()
+    return
+  }
+  await renderSidebar(s)
+}
+
+// Render now and keep the sweep alive while the run is active.
+async function refreshSidebar(s?: RunState) {
+  if (!serverUrl) return
+  if (!sweepTimer) {
+    sweepTimer = setInterval(() => {
+      sweepTick().catch(async (e) => {
+        const msg = `sweep failed: ${String(e)}`
+        if (msg !== lastSweepError) {
+          lastSweepError = msg
+          await log(msg)
+        }
+      })
+    }, 1000)
+  }
+  await sweepTick(s ?? (await readState()))
 }
 
 function classify(subagentType: string): { kind: Kind; tier: Tier } | null {
@@ -296,62 +432,31 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
 
 // ------------------------------------------------------------- recovery ----
 async function recoverStale() {
-  let interrupted: AgentEntry[] = []
   const acted = await update((s) => {
     const age = Date.now() - Date.parse(s.updatedAt || "0")
     if (!isFinite(age) || age < STALE_AFTER_MS) return false
     let changed = false
-    interrupted = []
+    const now = new Date().toISOString()
     for (const a of s.agents) {
       if (a.status === "working") {
         a.status = "failed"
+        a.endedAt = now
         a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
-        interrupted.push(a)
         changed = true
       }
     }
     if (changed) {
       s.phase = "failed"
+      s.failReason = "interrupted"
+      s.doneAt = s.doneAt ?? now
       s.pendingQuestion = false
     }
     return changed
   })
   if (acted) {
     await log("recovered stale run: working agents marked failed (interrupted)")
-    // sidebar honesty: mark interrupted rows so they don't look "working"
-    for (const a of interrupted) await setTitle(a.sessionId, sidebarTitle(a, "✗"))
-    if (interrupted.length) {
-      const s = await readState()
-      if (s.orchestrator) await setTitle(s.orchestrator, `✗ GIGGA [${progressBar(4)}] interrupted`)
-    }
+    await refreshSidebar() // renders the ✗ final titles, then the sweep stops itself
   }
-}
-
-// ------------------------------------------- TUI sidebar progress bar ------
-// The TUI sidebar cannot render widgets, but the orchestrator row's TITLE is
-// live-updatable — so it carries a text progress bar matching the dashboard
-// stepper: READ REPO → QUESTIONS → PLAN → EXECUTE → CHECK → DONE.
-const PHASE_STEPS: Record<string, number> = {
-  idle: 0, recon: 1, questions: 2, plan: 3, executing: 4, checking: 5, done: 6, failed: 4,
-}
-
-function progressBar(filled: number, total = 6) {
-  const f = Math.max(0, Math.min(total, filled))
-  return "▓".repeat(f) + "░".repeat(total - f)
-}
-
-async function updateOrchestratorProgress(s: RunState) {
-  if (!s.orchestrator) return
-  const step = PHASE_STEPS[s.phase] ?? 0
-  let suffix: string = s.phase
-  if (s.phase === "executing") {
-    const ws = s.agents.filter((a) => a.kind === "worker")
-    const done = ws.filter((w) => w.status !== "working").length
-    if (ws.length) suffix = `executing ${done}/${ws.length} workers`
-  } else if (s.phase === "questions" && s.pendingQuestion) {
-    suffix = "questions — waiting for you"
-  }
-  await setTitle(s.orchestrator, `GIGGA [${progressBar(step)}] ${suffix}`)
 }
 
 // ------------------------------------------------------- phase toasts ------
@@ -361,7 +466,7 @@ async function announcePhase(s: RunState) {
   const prev = lastAnnouncedPhase
   lastAnnouncedPhase = s.phase
   const workers = s.agents.filter((a) => a.kind === "worker")
-  await updateOrchestratorProgress(s)
+  await refreshSidebar(s)
   switch (s.phase) {
     case "recon":
     case "questions":
@@ -461,7 +566,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
   switch (ev.type) {
     case "session.created": {
       const info = p.info ?? {}
-      let childTitle: string | null = null
+      let bound = false
       await update((s) => {
         const cur = s.sessions[info.id] ?? {}
         const next = { ...cur }
@@ -475,12 +580,12 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           )
           if (entry) {
             entry.sessionId = info.id
-            childTitle = sidebarTitle(entry)
+            bound = true
           }
         }
         return true
       })
-      if (childTitle) await setTitle(p.info?.id, childTitle)
+      if (bound) await refreshSidebar() // the child row exists now — title it immediately
       return
     }
 
@@ -530,7 +635,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       if (!acted) return
       const q = p.questions?.[0]?.question ?? "(question)"
       await log(`question.asked [${rid}] ${String(q).slice(0, 120)}`)
-      await updateOrchestratorProgress(await readState())
+      await refreshSidebar()
       await bell()
       await toast("GIGGA is waiting for your answer", "warning")
       return
@@ -587,6 +692,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
             const fresh = freshState()
             Object.assign(s, fresh)
             s.orchestrator = parent
+            s.runStartedAt = new Date().toISOString()
             s.agents.push({
               id: 0,
               kind: "orchestrator",
@@ -605,6 +711,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
             status: "working",
             sessionId: null,
             parentSessionId: s.orchestrator!,
+            startedAt: new Date().toISOString(),
           }
           s.agents.push(entry)
           s.taskCalls[callID] = { entryIndex: s.agents.length - 1, asked: true }
@@ -615,7 +722,9 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         })
         if (acted) {
           await log(`task running [${callID}] ${subagentType} "${String(st.input?.description ?? "").slice(0, 60)}"`)
-          await announcePhase(await readState())
+          const s2 = await readState()
+          await refreshSidebar(s2) // explicit: announcePhase skips repeats across runs
+          await announcePhase(s2)
         }
         return
       }
@@ -629,17 +738,12 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           if (!entry || entry.status !== "working") return false
           if (m) entry.sessionId = m[1]
           entry.status = st.status === "error" ? "failed" : "done"
+          entry.endedAt = new Date().toISOString()
           return true
         })
         if (acted) {
           await log(`task ${st.status} [${callID}] ${subagentType} session=${m?.[1] ?? "?"}`)
-          const s2 = await readState()
-          const ref = s2.taskCalls[callID]
-          const entry = ref ? s2.agents[ref.entryIndex] : null
-          if (entry?.sessionId) {
-            await setTitle(entry.sessionId, sidebarTitle(entry, st.status === "error" ? "✗" : "✓"))
-          }
-          await updateOrchestratorProgress(s2)
+          await refreshSidebar() // freeze the row as ✓/✗ with its duration
         }
       }
       return
@@ -648,25 +752,26 @@ async function handleEvent(ev: { type: string; properties?: any }) {
     case "session.idle": {
       const sid = p.sessionID
       const acted = await update((s) => {
+        const now = new Date().toISOString()
         if (sid === s.orchestrator) {
           let changed = false
-          for (const a of s.agents) if (a.status === "working") { a.status = "done"; changed = true }
+          for (const a of s.agents) if (a.status === "working") { a.status = "done"; a.endedAt = now; changed = true }
           if (s.pendingQuestion) { s.pendingQuestion = false; changed = true }
-          if (s.phase !== "done") { s.phase = "done"; changed = true }
+          if (s.phase !== "done") { s.phase = "done"; s.doneAt = now; changed = true }
+          else if (!s.doneAt) { s.doneAt = now; changed = true }
           return changed
         }
         const entry = s.agents.find((a) => a.sessionId === sid && a.status === "working")
         if (!entry) return false
         entry.status = "done"
+        entry.endedAt = entry.endedAt ?? now
         return true
       })
       if (acted) {
         await log(`session.idle ${sid}`)
         const s2 = await readState()
-        if (sid === s2.orchestrator) {
-          await announcePhase(s2)
-          await markOrchestratorDone(sid) // close the run's sidebar row
-        }
+        if (sid === s2.orchestrator) await announcePhase(s2) // "done" toast; sweep flashes 🎉 then settles ✓
+        else await refreshSidebar(s2)
       }
       return
     }
@@ -676,13 +781,13 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       const acted = await update((s) => {
         if (p.sessionID !== s.orchestrator || s.phase === "failed") return false
         s.phase = "failed"
+        s.failReason = "error"
+        s.doneAt = s.doneAt ?? new Date().toISOString()
         return true
       })
       if (acted) {
         await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
-        const s2 = await readState()
-        await announcePhase(s2)
-        if (s2.orchestrator) await setTitle(s2.orchestrator, `✗ GIGGA [${progressBar(4)}] failed — /GIGGA-retry`)
+        await announcePhase(await readState()) // error toast + ✗ final titles
       }
       return
     }

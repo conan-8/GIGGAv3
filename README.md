@@ -62,12 +62,17 @@ opencode.json backup).
 
 **1. opencode TUI** — `GIGGA` in the Tab agent cycle; bell + toast on pending
 questions; commands `/GIGGA-setup`, `/GIGGA-fasttrack`, `/GIGGA-retry`,
-`/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) doubles as the worker-box
-list**: GIGGA titles every session it spawns like a dashboard box —
-`GIGGA #1 (M) · Worker 1: parseConfig validation`, prefixed `✓`/`✗` when
-done/failed — so toggling the sidebar shows the whole team at a glance and
-selecting an entry opens that worker's conversation. Worker views are also
-reachable inline: `→`/`←` cycles child (subagent) sessions, `↑` returns to
+`/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) doubles as a live progress
+tree**: the GIGGA row carries a 6-step phase bar with a pulsing current step
+plus one traffic-light dot per subagent (🟢 done · ❌ failed · 🟡 running ·
+🔴 spawning), and every subagent gets its own row — status dot, braille
+spinner, and for workers a time-budget bar (elapsed vs tier budget, H 20m ·
+M 10m · L 5m) with a ticking clock, freezing to `✓ m:ss` / `✗ m:ss` when it
+lands; a finished run flashes 🎉 and settles to
+`✓ GIGGA ▓▓▓▓▓▓ done · 12:30 · 4 workers`. The sidebar can't render widgets,
+so this is pure title text animated by a 1-second sweep — select any row to
+open that worker's conversation. Worker views are also reachable inline:
+`→`/`←` cycles child (subagent) sessions, `↑` returns to
 the parent (`session_child_cycle` & friends — already the defaults). Prefer
 other keys? Drop this in `~/.config/opencode/tui.json` (not applied by
 GIGGA):

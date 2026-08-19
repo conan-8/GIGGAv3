@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- TUI sidebar: sessions are now titled as an **animated progress tree**
+  (pure title text — the sidebar can't render widgets). The GIGGA row
+  carries a 6-step phase bar with a pulsing current step plus one
+  traffic-light dot per subagent (🟢 done · ❌ failed · 🟡 running · 🔴
+  spawning); every subagent row shows a `├─`/`└─` connector, its status
+  dot, a braille spinner, and — for workers — a time-budget bar (elapsed
+  vs tier budget H 20m · M 10m · L 5m) with a ticking m:ss clock, freezing
+  to `✓ m:ss` / `✗ m:ss` on completion. A finished run flashes 🎉 then
+  settles to `✓ … done · mm:ss · N workers`. Driven by a 1-second sweep
+  that PATCHes only changed rows in one batch; animation phases derive
+  from wall-clock time so concurrent plugin instances can't flap titles.
+  Replaces the old `GIGGA #N (tier) · task` checklist titles.
+- State schema: agents gained optional `startedAt`/`endedAt`, runs gained
+  optional `runStartedAt`/`doneAt`/`failReason` (old state files remain
+  readable — missing fields just disable clocks/bars for those rows).
+
 ## v0.1.0 — 2026-08-19
 
 First tagged release. Full spec implemented and audited
