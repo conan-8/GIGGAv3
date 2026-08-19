@@ -178,7 +178,7 @@ fi
 # ------------------------------------------------------------- next steps --
 msg ""
 msg "GIGGA installed into $GIGGA_HOME:"
-msg "  agents/    (8 agents)   commands/ (3 commands)   plugins/GIGGA.ts"
+msg "  agents/    (8 agents)   commands/ (4 commands)   plugins/GIGGA.ts"
 msg "  GIGGA/GIGGA.config.json"
 msg ""
 msg "Next steps:"
