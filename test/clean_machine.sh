@@ -12,7 +12,10 @@ LOG="${1:-/tmp/gigga-clean-machine.log}"
 CM="$(mktemp -d /tmp/gigga-clean.XXXXXX)"
 export HOME="$CM/home"
 mkdir -p "$HOME"
-MYPATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# the "clean machine" has ONLY opencode + git + curl: inject the real
+# opencode's bin dir (plus git/curl from /usr/bin) onto the scrubbed PATH
+OC_BIN="$(dirname "$(command -v opencode)")"
+MYPATH="$HOME/.local/bin:$OC_BIN:/usr/local/bin:/usr/bin:/bin"
 REAL_HOME="${SUDO_OR_REAL_HOME:-$HOME}"
 
 exec > >(tee -a "$LOG") 2>&1
