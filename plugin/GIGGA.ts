@@ -267,7 +267,10 @@ async function markOrchestratorDone(sessionID: string | null | undefined) {
     const cur = await res.json()
     const title: string = cur?.title ?? "GIGGA run"
     if (title.startsWith("✓") || title.startsWith("✗")) return
-    await setTitle(sessionID, `✓ GIGGA · ${shortTask(title) || "run finished"}`)
+    const s = await readState()
+    const cleaned = title.replace(/^GIGGA \[[^\]]*\]\s*\S*/, "").trim() // drop our live bar + suffix
+    const summary = shortTask(s.originalRequest || cleaned || title)
+    await setTitle(sessionID, `✓ GIGGA [${progressBar(6)}] done · ${summary || "run finished"}`)
   } catch (e) {
     await log(`markOrchestratorDone failed: ${String(e)}`)
   }
@@ -319,9 +322,36 @@ async function recoverStale() {
     for (const a of interrupted) await setTitle(a.sessionId, sidebarTitle(a, "✗"))
     if (interrupted.length) {
       const s = await readState()
-      if (s.orchestrator) await setTitle(s.orchestrator, "✗ GIGGA · run interrupted")
+      if (s.orchestrator) await setTitle(s.orchestrator, `✗ GIGGA [${progressBar(4)}] interrupted`)
     }
   }
+}
+
+// ------------------------------------------- TUI sidebar progress bar ------
+// The TUI sidebar cannot render widgets, but the orchestrator row's TITLE is
+// live-updatable — so it carries a text progress bar matching the dashboard
+// stepper: READ REPO → QUESTIONS → PLAN → EXECUTE → CHECK → DONE.
+const PHASE_STEPS: Record<string, number> = {
+  idle: 0, recon: 1, questions: 2, plan: 3, executing: 4, checking: 5, done: 6, failed: 4,
+}
+
+function progressBar(filled: number, total = 6) {
+  const f = Math.max(0, Math.min(total, filled))
+  return "▓".repeat(f) + "░".repeat(total - f)
+}
+
+async function updateOrchestratorProgress(s: RunState) {
+  if (!s.orchestrator) return
+  const step = PHASE_STEPS[s.phase] ?? 0
+  let suffix: string = s.phase
+  if (s.phase === "executing") {
+    const ws = s.agents.filter((a) => a.kind === "worker")
+    const done = ws.filter((w) => w.status !== "working").length
+    if (ws.length) suffix = `executing ${done}/${ws.length} workers`
+  } else if (s.phase === "questions" && s.pendingQuestion) {
+    suffix = "questions — waiting for you"
+  }
+  await setTitle(s.orchestrator, `GIGGA [${progressBar(step)}] ${suffix}`)
 }
 
 // ------------------------------------------------------- phase toasts ------
@@ -331,7 +361,11 @@ async function announcePhase(s: RunState) {
   const prev = lastAnnouncedPhase
   lastAnnouncedPhase = s.phase
   const workers = s.agents.filter((a) => a.kind === "worker")
+  await updateOrchestratorProgress(s)
   switch (s.phase) {
+    case "recon":
+    case "questions":
+      break
     case "plan":
       if (prev) await toast("GIGGA: planning…", "info")
       break
@@ -496,6 +530,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       if (!acted) return
       const q = p.questions?.[0]?.question ?? "(question)"
       await log(`question.asked [${rid}] ${String(q).slice(0, 120)}`)
+      await updateOrchestratorProgress(await readState())
       await bell()
       await toast("GIGGA is waiting for your answer", "warning")
       return
@@ -604,6 +639,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           if (entry?.sessionId) {
             await setTitle(entry.sessionId, sidebarTitle(entry, st.status === "error" ? "✗" : "✓"))
           }
+          await updateOrchestratorProgress(s2)
         }
       }
       return
@@ -644,7 +680,9 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       })
       if (acted) {
         await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
-        await announcePhase(await readState())
+        const s2 = await readState()
+        await announcePhase(s2)
+        if (s2.orchestrator) await setTitle(s2.orchestrator, `✗ GIGGA [${progressBar(4)}] failed — /GIGGA-retry`)
       }
       return
     }
