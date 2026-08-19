@@ -256,6 +256,23 @@ function sidebarTitle(entry: { kind: string; id: number; tier: Tier; task: strin
   return `${prefix}GIGGA ${entry.kind} · ${shortTask(entry.task)}`
 }
 
+// Mark the orchestrator's own sidebar row as finished (prefix ✓) so every
+// completed run is visually closed and a new GIGGA session reads as the
+// live group. Keeps opencode's auto-summary as the text.
+async function markOrchestratorDone(sessionID: string | null | undefined) {
+  if (!serverUrl || !sessionID) return
+  try {
+    const res = await fetch(new URL(`session/${sessionID}`, serverUrl), { signal: AbortSignal.timeout(1500) })
+    if (!res.ok) return
+    const cur = await res.json()
+    const title: string = cur?.title ?? "GIGGA run"
+    if (title.startsWith("✓") || title.startsWith("✗")) return
+    await setTitle(sessionID, `✓ GIGGA · ${shortTask(title) || "run finished"}`)
+  } catch (e) {
+    await log(`markOrchestratorDone failed: ${String(e)}`)
+  }
+}
+
 function classify(subagentType: string): { kind: Kind; tier: Tier } | null {
   if (subagentType === "GIGGA-recon") return { kind: "recon", tier: null }
   if (subagentType === "GIGGA-checker") return { kind: "checker", tier: null }
@@ -276,14 +293,17 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
 
 // ------------------------------------------------------------- recovery ----
 async function recoverStale() {
+  let interrupted: AgentEntry[] = []
   const acted = await update((s) => {
     const age = Date.now() - Date.parse(s.updatedAt || "0")
     if (!isFinite(age) || age < STALE_AFTER_MS) return false
     let changed = false
+    interrupted = []
     for (const a of s.agents) {
       if (a.status === "working") {
         a.status = "failed"
         a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
+        interrupted.push(a)
         changed = true
       }
     }
@@ -293,7 +313,15 @@ async function recoverStale() {
     }
     return changed
   })
-  if (acted) await log("recovered stale run: working agents marked failed (interrupted)")
+  if (acted) {
+    await log("recovered stale run: working agents marked failed (interrupted)")
+    // sidebar honesty: mark interrupted rows so they don't look "working"
+    for (const a of interrupted) await setTitle(a.sessionId, sidebarTitle(a, "✗"))
+    if (interrupted.length) {
+      const s = await readState()
+      if (s.orchestrator) await setTitle(s.orchestrator, "✗ GIGGA · run interrupted")
+    }
+  }
 }
 
 // ------------------------------------------------------- phase toasts ------
@@ -494,7 +522,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           s.phase = "plan"
           return true
         })
-        if (acted) await announcePhase(s)
+        if (acted) await announcePhase(await readState())
         return
       }
       if (part.tool !== "task") return
@@ -598,7 +626,11 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       })
       if (acted) {
         await log(`session.idle ${sid}`)
-        if (sid === (await readState()).orchestrator) await announcePhase(await readState())
+        const s2 = await readState()
+        if (sid === s2.orchestrator) {
+          await announcePhase(s2)
+          await markOrchestratorDone(sid) // close the run's sidebar row
+        }
       }
       return
     }
