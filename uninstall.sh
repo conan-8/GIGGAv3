@@ -18,7 +18,7 @@ for f in GIGGA GIGGA-recon GIGGA-fasttrack GIGGA-checker GIGGA-config \
          GIGGA-worker-low GIGGA-worker-medium GIGGA-worker-high; do
   rm -f "$GIGGA_HOME/agents/$f.md"
 done
-for f in GIGGA-setup GIGGA-fasttrack GIGGA-retry; do
+for f in GIGGA-setup GIGGA-fasttrack GIGGA-retry GIGGA-status; do
   rm -f "$GIGGA_HOME/commands/$f.md"
 done
 rm -f "$GIGGA_HOME/plugins/GIGGA.ts"
