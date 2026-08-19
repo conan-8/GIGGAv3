@@ -35,7 +35,6 @@ export function projectStatePath(projectDir: string, cfgRoot: string): string {
 const CFG_ROOT = process.env.GIGGA_HOME ?? join(process.env.HOME ?? "~", ".config", "opencode")
 const GIGGA_DIR = join(CFG_ROOT, "GIGGA")
 const CONFIG_FILE = join(GIGGA_DIR, "GIGGA.config.json")
-const LEGACY_CONFIG_FILE = join(CFG_ROOT, "gigga", "gigga.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
 const STALE_AFTER_MS = 120_000
 
@@ -119,11 +118,7 @@ function readConfig(): any {
   try {
     return JSON.parse(readFileSync(CONFIG_FILE, "utf8"))
   } catch {
-    try {
-      return JSON.parse(readFileSync(LEGACY_CONFIG_FILE, "utf8")) // pre-v0.1.0 layout
-    } catch {
-      return {}
-    }
+    return {}
   }
 }
 
