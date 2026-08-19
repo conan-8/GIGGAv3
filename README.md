@@ -58,12 +58,17 @@ opencode.json backup).
 
 ## The two UIs
 
-**1. opencode TUI** — `gigga` in the Tab agent cycle; bell + toast on pending
+**1. opencode TUI** — `GIGGA` in the Tab agent cycle; bell + toast on pending
 questions; commands `/gigga-setup`, `/gigga-fasttrack`, `/gigga-retry`,
-`/gigga-status`. Worker views are natively reachable: `→`/`←` cycles child
-(subagent) sessions, `↑` returns to the parent (`session_child_cycle` &
-friends — already the defaults). Prefer other keys? Drop this in
-`~/.config/opencode/tui.json` (not applied by GIGGA):
+`/gigga-status`. **The TUI sidebar (`ctrl+x b`) doubles as the worker-box
+list**: GIGGA titles every session it spawns like a dashboard box —
+`GIGGA #1 (M) · Worker 1: parseConfig validation`, prefixed `✓`/`✗` when
+done/failed — so toggling the sidebar shows the whole team at a glance and
+selecting an entry opens that worker's conversation. Worker views are also
+reachable inline: `→`/`←` cycles child (subagent) sessions, `↑` returns to
+the parent (`session_child_cycle` & friends — already the defaults). Prefer
+other keys? Drop this in `~/.config/opencode/tui.json` (not applied by
+GIGGA):
 
 ```json
 { "keybinds": { "session_child_cycle": "ctrl+right", "session_parent": "ctrl+up" } }

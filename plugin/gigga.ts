@@ -223,6 +223,34 @@ async function toast(message: string, variant: "info" | "warning" | "error" | "s
   }
 }
 
+// TUI sidebar integration (verified opencode 1.18.18, DEVIATIONS #27): the
+// sidebar (ctrl+x b) lists sessions by title, so GIGGA titles its sessions
+// like dashboard boxes: "⚡ GIGGA · request", "GIGGA #2 (M) · task", "✓ …".
+async function setTitle(sessionID: string | null | undefined, title: string) {
+  if (!serverUrl || !sessionID) return
+  try {
+    const res = await fetch(new URL(`session/${sessionID}`, serverUrl), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: title.slice(0, 70) }),
+    })
+    if (!res.ok) await log(`setTitle: HTTP ${res.status}`)
+  } catch (e) {
+    await log(`setTitle failed: ${String(e)}`)
+  }
+}
+
+const shortTask = (s: string) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, 40)
+
+function sidebarTitle(entry: { kind: string; id: number; tier: Tier; task: string }, done?: "✓" | "✗") {
+  const prefix = done ? `${done} ` : ""
+  if (entry.kind === "worker") {
+    const t = entry.tier ? `(${entry.tier[0].toUpperCase()})` : ""
+    return `${prefix}GIGGA #${entry.id} ${t} · ${shortTask(entry.task)}`
+  }
+  return `${prefix}GIGGA ${entry.kind} · ${shortTask(entry.task)}`
+}
+
 function classify(subagentType: string): { kind: Kind; tier: Tier } | null {
   if (subagentType === "gigga-recon") return { kind: "recon", tier: null }
   if (subagentType === "gigga-checker") return { kind: "checker", tier: null }
@@ -366,6 +394,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
   switch (ev.type) {
     case "session.created": {
       const info = p.info ?? {}
+      let childTitle: string | null = null
       await update((s) => {
         const cur = s.sessions[info.id] ?? {}
         const next = { ...cur }
@@ -377,10 +406,14 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           const entry = s.agents.find(
             (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
           )
-          if (entry) entry.sessionId = info.id
+          if (entry) {
+            entry.sessionId = info.id
+            childTitle = sidebarTitle(entry)
+          }
         }
         return true
       })
+      if (childTitle) await setTitle(p.info?.id, childTitle)
       return
     }
 
@@ -394,6 +427,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         const text = parts.find((x: any) => x?.type === "text")?.text
         if (typeof text === "string" && text.trim()) firstUserText = text.trim().slice(0, 500)
       }
+      let orchTitle: string | null = null
       await update((s) => {
         const cur = s.sessions[sid] ?? {}
         const next = { ...cur }
@@ -406,10 +440,12 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         }
         if (sid === s.orchestrator && !s.originalRequest && next.firstUserText) {
           s.originalRequest = next.firstUserText
+          orchTitle = `⚡ GIGGA · ${shortTask(next.firstUserText)}`
           changed = true
         }
         return changed
       })
+      if (orchTitle) await setTitle(sid, orchTitle)
       return
     }
 
@@ -527,7 +563,15 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           entry.status = st.status === "error" ? "failed" : "done"
           return true
         })
-        if (acted) await log(`task ${st.status} [${callID}] ${subagentType} session=${m?.[1] ?? "?"}`)
+        if (acted) {
+          await log(`task ${st.status} [${callID}] ${subagentType} session=${m?.[1] ?? "?"}`)
+          const s2 = await readState()
+          const ref = s2.taskCalls[callID]
+          const entry = ref ? s2.agents[ref.entryIndex] : null
+          if (entry?.sessionId) {
+            await setTitle(entry.sessionId, sidebarTitle(entry, st.status === "error" ? "✗" : "✓"))
+          }
+        }
       }
       return
     }
