@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+- Plugin was silently failing to load in opencode (`failed to load plugin …
+  "Plugin export is not a function"` / `"path" property must be of type
+  string` in opencode.log): the 1.18.18 loader calls **every** module export
+  as a plugin. `GIGGA.ts` now exports exactly one function (`GiggaPlugin`);
+  all helpers, including `projectStatePath`, are module-private. Verified
+  end-to-end: `opencode run` in a scratch project logs `plugin loaded`,
+  writes `server.json`, zero load errors.
+
 ### Changed
 - TUI sidebar: sessions are now titled as an **animated progress tree**
   (pure title text — the sidebar can't render widgets). The GIGGA row

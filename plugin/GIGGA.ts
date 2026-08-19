@@ -26,7 +26,7 @@ import { createHash } from "node:crypto"
  * - every handler wrapped: plugin errors never crash opencode.
  */
 
-export function projectStatePath(projectDir: string, cfgRoot: string): string {
+function projectStatePath(projectDir: string, cfgRoot: string): string {
   const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
   const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
   return join(cfgRoot, "GIGGA", "projects", `${slug}-${hash}`, "state.json")
@@ -265,9 +265,14 @@ const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").
 //   native red/yellow/green in the plain-text title.
 // A 1s sweep PATCHes all rows in one pass; spinner phase, step pulse and the
 // done-flash derive from wall-clock time, so concurrent plugin instances
-// compute identical titles (no flapping). Pure helpers are exported for the
-// sidebar-format conformance test.
-export const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+// compute identical titles (no flapping).
+// EXPORT SHAPE (verified opencode 1.18.18, DEVIATIONS #28): the plugin loader
+// calls EVERY module export as a plugin — this file must export exactly one
+// function (`GiggaPlugin`). A non-function export throws "Plugin export is
+// not a function"; a helper that touches its args throws when invoked with
+// the PluginInput object (path.basename → "path property must be of type
+// string, got object"). Keep helpers module-private.
+const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 const PHASE_STEPS: Record<string, number> = {
   idle: 0, recon: 1, questions: 2, plan: 3, executing: 4, checking: 5, done: 6, failed: 4,
 }
@@ -276,7 +281,7 @@ const PHASE_WORD: Record<string, string> = {
 }
 const TIER_BUDGET_MS: Record<string, number> = { high: 20 * 60_000, medium: 10 * 60_000, low: 5 * 60_000 }
 
-export function fmtClock(ms: number): string {
+function fmtClock(ms: number): string {
   const t = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(t / 3600)
   const m = Math.floor((t % 3600) / 60)
@@ -290,7 +295,7 @@ function elapsedMs(a: AgentEntry): number | null {
   return isFinite(d) ? Math.max(0, d) : null
 }
 
-export function dotOf(a: AgentEntry): string {
+function dotOf(a: AgentEntry): string {
   if (a.status === "done") return "🟢"
   if (a.status === "failed") return "❌"
   return a.sessionId ? "🟡" : "🔴"
@@ -298,21 +303,21 @@ export function dotOf(a: AgentEntry): string {
 
 const dotRank = (a: AgentEntry) => (a.status === "done" ? 0 : a.status === "failed" ? 1 : a.sessionId ? 2 : 3)
 
-export function orchBar(phase: string, sec: number): string {
+function orchBar(phase: string, sec: number): string {
   const step = PHASE_STEPS[phase] ?? 0
   if (phase === "done") return "▓".repeat(6)
   if (phase === "failed" || step === 0) return "▓".repeat(step) + "░".repeat(6 - step)
   return "▓".repeat(step - 1) + (sec % 2 ? "▒" : "▓") + "░".repeat(6 - step)
 }
 
-export function budgetBar(a: { tier: Tier }, ms: number): string {
+function budgetBar(a: { tier: Tier }, ms: number): string {
   const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
   if (!budget) return ""
   const cells = Math.max(1, Math.min(5, Math.ceil((ms / budget) * 5)))
   return "▓".repeat(cells) + "░".repeat(5 - cells)
 }
 
-export function orchestratorTitle(s: RunState, sec: number, flash = false): string {
+function orchestratorTitle(s: RunState, sec: number, flash = false): string {
   if (s.phase === "failed") {
     return s.failReason === "interrupted" ? "✗ GIGGA ▓▓▓▓░░ interrupted" : "✗ GIGGA ▓▓▓▓░░ failed — /GIGGA-retry"
   }
@@ -331,7 +336,7 @@ export function orchestratorTitle(s: RunState, sec: number, flash = false): stri
   return dots ? `⚡ GIGGA ${orchBar(s.phase, sec)} · ${dots} ${word}` : `⚡ GIGGA ${orchBar(s.phase, sec)} ${word}`
 }
 
-export function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, sec: number): string {
+function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, sec: number): string {
   const conn = isLast ? "└─" : "├─"
   const name = a.kind === "worker" ? `#${a.id} ${shortTask(a.task, 22)}` : `${a.kind} ${shortTask(a.task, 18)}`
   if (a.status !== "working") {
