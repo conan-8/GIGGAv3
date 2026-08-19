@@ -9,21 +9,22 @@ GIGGA_HOME="${GIGGA_HOME:-$HOME/.config/opencode}"
 
 msg() { printf '%s\n' "$*"; }
 
-# Remove GIGGA's own directory (config included — this is an uninstall).
-rm -rf "$GIGGA_HOME/gigga"
+# Remove GIGGA's own directory (config included — this is an uninstall),
+# plus the legacy lowercase layout from pre-v0.1.0 installs.
+rm -rf "$GIGGA_HOME/GIGGA" "$GIGGA_HOME/gigga"
 
 # Remove GIGGA agents/commands/plugin (only files GIGGA owns).
-for f in GIGGA gigga-recon gigga-fasttrack gigga-checker gigga-config \
-         gigga-worker-low gigga-worker-medium gigga-worker-high; do
+for f in GIGGA GIGGA-recon GIGGA-fasttrack GIGGA-checker GIGGA-config \
+         GIGGA-worker-low GIGGA-worker-medium GIGGA-worker-high; do
   rm -f "$GIGGA_HOME/agents/$f.md"
 done
-for f in gigga-setup gigga-fasttrack gigga-retry; do
+for f in GIGGA-setup GIGGA-fasttrack GIGGA-retry; do
   rm -f "$GIGGA_HOME/commands/$f.md"
 done
-rm -f "$GIGGA_HOME/plugins/gigga.ts"
+rm -f "$GIGGA_HOME/plugins/GIGGA.ts"
 
-# Dashboard launcher (the dashboard itself lives under gigga/, removed above).
-rm -f "$HOME/.local/bin/gigga-dashboard"
+# Dashboard launcher (the dashboard itself lives under GIGGA/, removed above).
+rm -f "$HOME/.local/bin/GIGGA-dashboard" "$HOME/.local/bin/gigga-dashboard"
 
 # Restore newest opencode.json backup; drop our subagent_depth key otherwise.
 OPENCODE_JSON="$GIGGA_HOME/opencode.json"

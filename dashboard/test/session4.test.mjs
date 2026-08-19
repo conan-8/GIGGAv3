@@ -16,14 +16,14 @@ test("projectStatePath: stable, namespaced, collision-resistant", () => {
   const a = projectStatePath("/home/me/proj", root)
   const b = projectStatePath("/home/me/other/proj", root)
   const a2 = projectStatePath("/home/me/proj/", root)
-  assert.ok(a.startsWith(join(root, "gigga", "projects", "proj-")))
+  assert.ok(a.startsWith(join(root, "GIGGA", "projects", "proj-")))
   assert.notEqual(a, b)
   assert.match(a, /proj-[0-9a-f]{10}[/\\]state\.json$/)
   assert.notEqual(a, a2, "trailing slash should hash differently (documented behavior)")
 })
 
-test("projectStatePath parity with plugin/gigga.ts (node --experimental-strip-types)", async () => {
-  const mod = await import("../../plugin/gigga.ts")
+test("projectStatePath parity with plugin/GIGGA.ts (node --experimental-strip-types)", async () => {
+  const mod = await import("../../plugin/GIGGA.ts")
   for (const dir of ["/home/me/proj", "/srv/weird name/x", "C:\\repo"]) {
     assert.equal(
       mod.projectStatePath(dir, "/cfg"),
@@ -55,7 +55,7 @@ test("recoverStaleState marks interrupted workers failed", async () => {
 })
 
 test("readProjectState returns null when absent", async () => {
-  const d = await mkdtemp(join(tmpdir(), "gigga-p-"))
+  const d = await mkdtemp(join(tmpdir(), "GIGGA-p-"))
   assert.equal(await readProjectState(d, "/nonexistent-cfg"), null)
 })
 
@@ -80,7 +80,7 @@ function validCfg() {
 const SHARED = new URL("../lib/shared.mjs", import.meta.url).pathname
 
 test("CLI validate flags a bad config", async () => {
-  const d = await mkdtemp(join(tmpdir(), "gigga-cli-"))
+  const d = await mkdtemp(join(tmpdir(), "GIGGA-cli-"))
   const cfg = join(d, "c.json")
   await writeFile(cfg, JSON.stringify({ tiers: { low: "x" }, defaultTier: "nope", maxParallel: 99 }))
   const { stdout } = await run(process.execPath, [SHARED, "validate", cfg])
@@ -90,12 +90,12 @@ test("CLI validate flags a bad config", async () => {
 })
 
 test("CLI wizard writes config + agent models + marks configured", async () => {
-  const root = await mkdtemp(join(tmpdir(), "gigga-wiz-"))
+  const root = await mkdtemp(join(tmpdir(), "GIGGA-wiz-"))
   await mkdir(join(root, "agents"), { recursive: true })
   for (const t of ["low", "medium", "high"]) {
     await writeFile(
-      join(root, "agents", `gigga-worker-${t}.md`),
-      `---\ndescription: w ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by gigga-config -->\n---\nbody\n`,
+      join(root, "agents", `GIGGA-worker-${t}.md`),
+      `---\ndescription: w ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by GIGGA-config -->\n---\nbody\n`,
     )
   }
   await writeFile(join(root, "agents", "GIGGA.md"), `---\ndescription: o\nmode: primary\n---\nbody\n`)
@@ -104,15 +104,15 @@ test("CLI wizard writes config + agent models + marks configured", async () => {
   const out = JSON.parse(stdout)
   assert.equal(out.ok, true)
   assert.equal(out.agentUpdates.filter((u) => u.changed).length, 4)
-  const written = JSON.parse(await readFile(join(root, "gigga", "gigga.config.json"), "utf8"))
+  const written = JSON.parse(await readFile(join(root, "GIGGA", "GIGGA.config.json"), "utf8"))
   assert.equal(written.configured, true)
-  const worker = await readFile(join(root, "agents", "gigga-worker-low.md"), "utf8")
-  assert.match(worker, /^model: kimi\/k3   # <!-- set by gigga-config -->$/m)
+  const worker = await readFile(join(root, "agents", "GIGGA-worker-low.md"), "utf8")
+  assert.match(worker, /^model: kimi\/k3   # <!-- set by GIGGA-config -->$/m)
   assert.ok(Array.isArray(out.cheatSheet) && out.cheatSheet.length === 5)
 })
 
 test("CLI status reads per-project state", async () => {
-  const root = await mkdtemp(join(tmpdir(), "gigga-st-"))
+  const root = await mkdtemp(join(tmpdir(), "GIGGA-st-"))
   const proj = join(root, "myproj")
   await mkdir(proj, { recursive: true })
   const stateFile = projectStatePath(proj, root)

@@ -18,7 +18,7 @@ Then:
 
 1. Restart opencode.
 2. Press **Tab** to switch to the `GIGGA` agent (next to Plan/Build).
-3. First request → GIGGA walks you through `/gigga-setup` (pick tier models
+3. First request → GIGGA walks you through `/GIGGA-setup` (pick tier models
    from your own providers, maxParallel, autoRetry, sound).
 
 Uninstall: `bash uninstall.sh` (removes only GIGGA files, restores your
@@ -37,30 +37,30 @@ opencode.json backup).
 
 - **GIGGA** orchestrator primary agent — Tab-switchable, all-caps and red in the agent picker; does the planning,
   not the coding.
-- **Read-only recon** (`gigga-recon`) inspects your repo and asks clarifying
+- **Read-only recon** (`GIGGA-recon`) inspects your repo and asks clarifying
   questions (≤ `questionRounds` rounds — enforced by the plugin, which
   silently drops questions past the cap — then explicit assumptions).
-- **Numbered workers** (`gigga-worker-low/medium/high`) run in parallel
+- **Numbered workers** (`GIGGA-worker-low/medium/high`) run in parallel
   (≤ `maxParallel`); hard tasks may spawn sub-subagents (`subagent_depth: 2`).
-- **Read-only checker** (`gigga-checker`) verifies the result against your
+- **Read-only checker** (`GIGGA-checker`) verifies the result against your
   original request; auto-retry (≤ 2) or ask, per config.
-- **Fasttrack** for simple requests: automatic, `/gigga-fasttrack`, the
+- **Fasttrack** for simple requests: automatic, `/GIGGA-fasttrack`, the
   dashboard's glowing button, or by answering a pending question with
   "fasttrack".
 - **Pending-question signals**: terminal bell + TUI toast; dashboard red
   ring + beep. Phase toasts ("GIGGA: planning… / 3 workers running / checking…").
 - **Per-project run state** under
-  `~/.config/opencode/gigga/projects/<project>-<hash>/state.json` — multiple
+  `~/.config/opencode/GIGGA/projects/<project>-<hash>/state.json` — multiple
   projects on one machine never collide. Interrupted runs (killed opencode)
   are marked `failed (interrupted)` on the next start.
-- **`/gigga-status`** — phase, agent table, pending-question state for the
+- **`/GIGGA-status`** — phase, agent table, pending-question state for the
   current project.
 
 ## The two UIs
 
 **1. opencode TUI** — `GIGGA` in the Tab agent cycle; bell + toast on pending
-questions; commands `/gigga-setup`, `/gigga-fasttrack`, `/gigga-retry`,
-`/gigga-status`. **The TUI sidebar (`ctrl+x b`) doubles as the worker-box
+questions; commands `/GIGGA-setup`, `/GIGGA-fasttrack`, `/GIGGA-retry`,
+`/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) doubles as the worker-box
 list**: GIGGA titles every session it spawns like a dashboard box —
 `GIGGA #1 (M) · Worker 1: parseConfig validation`, prefixed `✓`/`✗` when
 done/failed — so toggling the sidebar shows the whole team at a glance and
@@ -74,7 +74,7 @@ GIGGA):
 { "keybinds": { "session_child_cycle": "ctrl+right", "session_parent": "ctrl+up" } }
 ```
 
-**2. GIGGA dashboard** — run `gigga-dashboard` (installed to
+**2. GIGGA dashboard** — run `GIGGA-dashboard` (installed to
 `~/.local/bin`, default port 4399, auto-falls back to a free port, opens your
 browser). Sidebar with clickable worker boxes (#1, #2, … tier badges,
 animated working borders with reduced-motion fallback), a progress stepper
@@ -88,9 +88,9 @@ bun). See [dashboard/README.md](dashboard/README.md).
 
 ## Configuration
 
-`~/.config/opencode/gigga/gigga.config.json` — managed by `/gigga-setup`
-(the `gigga-config` agent), the dashboard's config screen, or the shared CLI
-(`node …/gigga/dashboard/lib/shared.mjs`). One implementation backs all
+`~/.config/opencode/GIGGA/GIGGA.config.json` — managed by `/GIGGA-setup`
+(the `GIGGA-config` agent), the dashboard's config screen, or the shared CLI
+(`node …/GIGGA/dashboard/lib/shared.mjs`). One implementation backs all
 three. The installer never overwrites an existing config.
 
 | key | type | default | meaning |
@@ -115,7 +115,7 @@ and the orchestrator default (restart opencode sessions to apply).
   (Advanced → Bell notification style); in Git Bash/WSL the hosting terminal
   decides. No external notifier is used by design. `sound: false` disables it.
 - **Dashboard port in use** — it auto-falls back to the next free port and
-  prints the URL; force one with `gigga-dashboard --port 4399`.
+  prints the URL; force one with `GIGGA-dashboard --port 4399`.
 - **Stale boxes stuck "working"** — if opencode was killed mid-run, agents
   are marked `failed (interrupted)` after ~2 minutes on the next start (or
   dashboard reload). Old runs clear when the next request starts.

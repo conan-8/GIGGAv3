@@ -6,7 +6,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/<OWNER>/GIGGAv3/main/install.sh | bash
 #
 # Cross-platform: macOS, Linux, Windows Git Bash / WSL.
-# Idempotent: safe to run twice; never overwrites gigga.config.json;
+# Idempotent: safe to run twice; never overwrites GIGGA.config.json;
 # backs up opencode.json before touching it.
 
 set -eu
@@ -16,7 +16,7 @@ REPO="GIGGAv3"
 BRANCH="main"
 
 GIGGA_HOME="${GIGGA_HOME:-$HOME/.config/opencode}"
-GIGGA_DIR="$GIGGA_HOME/gigga"
+GIGGA_DIR="$GIGGA_HOME/GIGGA"
 
 msg()  { printf '%s\n' "$*"; }
 err()  { printf 'error: %s\n' "$*" >&2; }
@@ -46,7 +46,7 @@ command -v curl >/dev/null 2>&1 || die "curl is required but not found."
 SRC="${GIGGA_SRC:-}"
 TMPDIR_G=""
 if [ -z "$SRC" ]; then
-TMPDIR_G="$(mktemp -d "${TMPDIR:-/tmp}/gigga-install.XXXXXX")"
+TMPDIR_G="$(mktemp -d "${TMPDIR:-/tmp}/GIGGA-install.XXXXXX")"
 trap '[ -n "$TMPDIR_G" ] && rm -rf "$TMPDIR_G"' EXIT
 
 TARBALL="https://codeload.github.com/$OWNER/$REPO/tar.gz/refs/heads/$BRANCH"
@@ -62,29 +62,35 @@ fi
 [ -d "$SRC/agents" ] || die "Downloaded archive has no agents/ dir — repo layout changed?"
 
 # --------------------------------------------------------------- install ---
+# brand migration (v0.1.0): lowercase layout -> GIGGA layout; user config is
+# never lost — moved only if the new location is empty
+if [ -d "$GIGGA_HOME/gigga" ] && [ ! -f "$GIGGA_DIR/GIGGA.config.json" ]; then
+  mkdir -p "$GIGGA_DIR"
+  [ -f "$GIGGA_HOME/gigga/gigga.config.json" ] &&     cp "$GIGGA_HOME/gigga/gigga.config.json" "$GIGGA_DIR/GIGGA.config.json" &&     msg "Migrated existing config from gigga/ to GIGGA/ (original kept)"
+fi
 mkdir -p "$GIGGA_HOME/agents" "$GIGGA_HOME/commands" "$GIGGA_HOME/plugins" "$GIGGA_DIR"
 
 cp "$SRC"/agents/*.md        "$GIGGA_HOME/agents/"
 cp "$SRC"/commands/*.md      "$GIGGA_HOME/commands/"
-cp "$SRC"/plugin/gigga.ts    "$GIGGA_HOME/plugins/"
-cp "$SRC"/gigga.config.default.json "$GIGGA_DIR/"
+cp "$SRC"/plugin/GIGGA.ts    "$GIGGA_HOME/plugins/"
+cp "$SRC"/GIGGA.config.default.json "$GIGGA_DIR/"
 
 # dashboard (server + UI + launcher)
 if [ -f "$SRC/dashboard/server.mjs" ]; then
   mkdir -p "$GIGGA_DIR/dashboard"
   cp -R "$SRC/dashboard/." "$GIGGA_DIR/dashboard/"
-  chmod +x "$GIGGA_DIR/dashboard/bin/gigga-dashboard" 2>/dev/null || true
-  # put gigga-dashboard on PATH via a standard user bin dir (no shell rc edits)
+  chmod +x "$GIGGA_DIR/dashboard/bin/GIGGA-dashboard" 2>/dev/null || true
+  # put GIGGA-dashboard on PATH via a standard user bin dir (no shell rc edits)
   BIN_DIR="$HOME/.local/bin"
   if mkdir -p "$BIN_DIR" 2>/dev/null && [ -w "$BIN_DIR" ]; then
-    cat > "$BIN_DIR/gigga-dashboard" <<'LAUNCHER'
+    cat > "$BIN_DIR/GIGGA-dashboard" <<'LAUNCHER'
 #!/usr/bin/env bash
-exec "${GIGGA_DASHBOARD_NODE:-node}" "$HOME/.config/opencode/gigga/dashboard/server.mjs" "$@"
+exec "${GIGGA_DASHBOARD_NODE:-node}" "$HOME/.config/opencode/GIGGA/dashboard/server.mjs" "$@"
 LAUNCHER
-    chmod +x "$BIN_DIR/gigga-dashboard"
+    chmod +x "$BIN_DIR/GIGGA-dashboard"
     case ":$PATH:" in
       *":$BIN_DIR:"*) ;;
-      *) msg "NOTE: $BIN_DIR is not on your PATH — add it to use the 'gigga-dashboard' command:" ;;
+      *) msg "NOTE: $BIN_DIR is not on your PATH — add it to use the 'GIGGA-dashboard' command:" ;;
     esac
     msg "      export PATH=\"\$HOME/.local/bin:\$PATH\""
   else
@@ -94,11 +100,11 @@ LAUNCHER
 fi
 
 # Config: never overwrite an existing one.
-if [ -f "$GIGGA_DIR/gigga.config.json" ]; then
-  msg "Keeping existing $GIGGA_DIR/gigga.config.json"
+if [ -f "$GIGGA_DIR/GIGGA.config.json" ]; then
+  msg "Keeping existing $GIGGA_DIR/GIGGA.config.json"
 else
-  cp "$SRC/gigga.config.default.json" "$GIGGA_DIR/gigga.config.json"
-  msg "Created default $GIGGA_DIR/gigga.config.json"
+  cp "$SRC/GIGGA.config.default.json" "$GIGGA_DIR/GIGGA.config.json"
+  msg "Created default $GIGGA_DIR/GIGGA.config.json"
 fi
 
 # ------------------------------------------- merge subagent_depth: 2 -------
@@ -172,12 +178,12 @@ fi
 # ------------------------------------------------------------- next steps --
 msg ""
 msg "GIGGA installed into $GIGGA_HOME:"
-msg "  agents/    (8 agents)   commands/ (3 commands)   plugins/gigga.ts"
-msg "  gigga/gigga.config.json"
+msg "  agents/    (8 agents)   commands/ (3 commands)   plugins/GIGGA.ts"
+msg "  GIGGA/GIGGA.config.json"
 msg ""
 msg "Next steps:"
 msg "  1. Restart opencode."
-msg "  2. Press Tab to switch to the gigga agent."
-msg "  3. Run /gigga-setup to map your model tiers."
+msg "  2. Press Tab to switch to the GIGGA agent."
+msg "  3. Run /GIGGA-setup to map your model tiers."
 msg ""
 msg "Uninstall anytime: bash uninstall.sh (or re-download it from the repo)."

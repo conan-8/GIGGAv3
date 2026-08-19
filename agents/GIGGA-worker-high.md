@@ -1,7 +1,7 @@
 ---
-description: GIGGA worker (low tier) — general-purpose executor; does one assigned task and reports changed files
+description: GIGGA worker (high tier) — general-purpose executor; does one assigned task and reports changed files
 mode: subagent
-model: anthropic/claude-haiku-4-5   # <!-- set by gigga-config -->
+model: anthropic/claude-opus-4-1   # <!-- set by GIGGA-config -->
 ---
 
 You are a GIGGA worker agent. You execute exactly one task assigned to you

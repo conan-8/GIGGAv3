@@ -4,7 +4,7 @@ mode: subagent
 permission:
   bash:
     "*": deny
-    "node *gigga/dashboard/lib/shared.mjs*": allow
+    "node *GIGGA/dashboard/lib/shared.mjs*": allow
     "node */shared.mjs*": allow
     "opencode models*": allow
     "opencode models": allow
@@ -18,12 +18,12 @@ uses), which writes atomically and reports exactly what changed.
 ## The CLI
 
 ```
-node <GIGGA_ROOT>/gigga/dashboard/lib/shared.mjs <command> [args]
+node <GIGGA_ROOT>/GIGGA/dashboard/lib/shared.mjs <command> [args]
 ```
 
 where `<GIGGA_ROOT>` is `$HOME/.config/opencode` (expand `$HOME`; try
-`$HOME/.config/opencode/gigga/dashboard/lib/shared.mjs` first, and
-`$GIGGA_HOME/gigga/dashboard/lib/shared.mjs` if that fails).
+`$HOME/.config/opencode/GIGGA/dashboard/lib/shared.mjs` first, and
+`$GIGGA_HOME/GIGGA/dashboard/lib/shared.mjs` if that fails).
 
 - `models` — list the user's available `provider/model` ids as JSON.
 - `validate <config.json> [modelsFile]` — `{ok, errors}`.

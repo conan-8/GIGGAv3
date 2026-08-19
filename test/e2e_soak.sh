@@ -4,7 +4,7 @@
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 P=4489; BASE="http://127.0.0.1:$P"; DP=4485
-SB="$(mktemp -d /tmp/gigga-soak.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
+SB="$(mktemp -d /tmp/GIGGA-soak.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
 code() { printf '```\n%s\n```\n' "$*"; }
 pstate() {
@@ -13,7 +13,7 @@ import hashlib, os, sys
 d, root = sys.argv[1], sys.argv[2]
 slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in os.path.basename(d))[:40] or "project"
 h = hashlib.sha256(d.encode()).hexdigest()[:10]
-print(os.path.join(root, "gigga", "projects", f"{slug}-{h}", "state.json"))
+print(os.path.join(root, "GIGGA", "projects", f"{slug}-{h}", "state.json"))
 ' "$1" "$H/.config/opencode"
 }
 trap 'bash "$REPO/test/stop_servers.sh" 4489 4485' EXIT
@@ -24,7 +24,7 @@ GIGGA_HOME="$H/.config/opencode" GIGGA_SRC="$REPO" bash "$REPO/install.sh" >/dev
 cp ~/.local/share/opencode/auth.json "$H/.local/share/opencode/auth.json"
 MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
 [ -n "$MODEL" ] || MODEL=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -1)
-CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/gigga/gigga.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; c["maxParallel"]=5; c["configured"]=True; print(json.dumps(c))')
+CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/GIGGA/GIGGA.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; c["maxParallel"]=5; c["configured"]=True; print(json.dumps(c))')
 node "$REPO/dashboard/lib/shared.mjs" wizard "$H/.config/opencode" "$CFGJSON" >/dev/null
 python3 - "$H/.config/opencode/opencode.json" <<'PY'
 import json, sys
@@ -85,7 +85,7 @@ print("1" if st == "idle" else "")
 PY
 }
 ST=$(pstate "$FX")
-SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 
 md "request: 8 independent one-file tasks (fill src/slot1..8.ts with real helpers)"
 curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Eight independent tasks, one per file — fill each src/slot1.ts … src/slot8.ts with a small, working, exported utility function (square, cube, isEven, isOdd, abs, sign, clampTo10, negate respectively). No task depends on another; parallelize the workers."}]}' -o /dev/null
@@ -129,7 +129,7 @@ fi
 # ---- phase 2: kill -9 mid-run + restart + dashboard honesty
 md ""
 md "## kill -9 mid-run + restart + dashboard honesty"
-KSID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+KSID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -s -X POST "$BASE/session/$KSID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Eight more independent tasks: extend each src/slot1..8.ts with a second exported function (double, triple, isPositive, isNegative, max0, min0, wrap10, invert)."}]}' -o /dev/null
 for _ in $(seq 1 120); do
   ans >/dev/null 2>&1
@@ -145,8 +145,8 @@ d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).is
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start
-PROBE=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' -d '{"agent":"gigga-fasttrack","parts":[{"type":"text","text":"Reply: ok"}]}' -o /dev/null
+PROBE=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Reply: ok"}]}' -o /dev/null
 sleep 20
 GIGGA_HOME="$H/.config/opencode" GIGGA_DATA_DIR="$H/.local/share/opencode" GIGGA_PROJECT_DIR="$FX" \
   node "$REPO/dashboard/server.mjs" --port "$DP" --no-open >/dev/null 2>&1 &

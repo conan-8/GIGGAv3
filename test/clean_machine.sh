@@ -8,8 +8,8 @@
 # Run AFTER `git push origin main` (and tag).
 set -u
 OWNER="${GIGGA_OWNER:-conan-8}"
-LOG="${1:-/tmp/gigga-clean-machine.log}"
-CM="$(mktemp -d /tmp/gigga-clean.XXXXXX)"
+LOG="${1:-/tmp/GIGGA-clean-machine.log}"
+CM="$(mktemp -d /tmp/GIGGA-clean.XXXXXX)"
 export HOME="$CM/home"
 mkdir -p "$HOME"
 # the "clean machine" has ONLY opencode + git + curl: inject the real
@@ -58,7 +58,7 @@ git clone -q "https://github.com/$OWNER/GIGGAv3.git" "$CM/repo"
 echo "=== suite rc=$?"
 
 echo
-echo "=== 6. gigga-dashboard smoke"
-env -i HOME="$HOME" PATH="$MYPATH" timeout 5 gigga-dashboard --port 4498 --no-open | head -3
+echo "=== 6. GIGGA-dashboard smoke"
+env -i HOME="$HOME" PATH="$MYPATH" timeout 5 GIGGA-dashboard --port 4498 --no-open | head -3
 
 echo "=== clean-machine run complete"

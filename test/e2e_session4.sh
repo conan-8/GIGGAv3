@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# GIGGA session-4 E2E: setup wizard + edge cases 1-8 + /gigga-status.
+# GIGGA session-4 E2E: setup wizard + edge cases 1-8 + /GIGGA-status.
 # Writes markdown evidence to stdout. Usage:
 #   bash test/e2e_session4.sh > test/results/2026-08-18-session4.md
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 PORT="${GIGGA_S4_PORT:-4470}"
 BASE="http://127.0.0.1:$PORT"
-SB="$(mktemp -d /tmp/gigga-s4.XXXXXX)"
+SB="$(mktemp -d /tmp/GIGGA-s4.XXXXXX)"
 H="$SB/home"
 SSE="$SB/sse.log"
 
@@ -19,7 +19,7 @@ d, root = sys.argv[1], sys.argv[2]
 slug = os.path.basename(d).replace("/", "-")[:40] or "project"
 slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in slug)
 h = hashlib.sha256(d.encode()).hexdigest()[:10]
-print(os.path.join(root, "gigga", "projects", f"{slug}-{h}", "state.json"))
+print(os.path.join(root, "GIGGA", "projects", f"{slug}-{h}", "state.json"))
 ' "$1" "$H/.config/opencode"
 }
 
@@ -62,7 +62,7 @@ start_server() {
 }
 sess_new() { # sess_new <dir> [agent]
   curl -s -X POST "$BASE/session" -H 'content-type: application/json' \
-    -d "{\"directory\":\"$1\",\"agent\":\"${2:-gigga}\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'
+    -d "{\"directory\":\"$1\",\"agent\":\"${2:-GIGGA}\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'
 }
 
 sse_json() { python3 - "$SSE" <<'PY'
@@ -182,7 +182,7 @@ for line in sys.stdin:
     part = d.get("properties", {}).get("part", {})
     if part.get("type") != "tool" or part.get("tool") != "task": continue
     st = part.get("state", {})
-    if st.get("input", {}).get("subagent_type") != "gigga-checker": continue
+    if st.get("input", {}).get("subagent_type") != "GIGGA-checker": continue
     m = re.search(r"VERDICT:\s*(PASS|FAIL)", str(st.get("output", "")))
     if m: print(m.group(1))
 '
@@ -190,7 +190,7 @@ for line in sys.stdin:
 
 FX="$SB/fx1"; mk_fixture "$FX" --git
 start_server
-CFG="$H/.config/opencode/gigga/gigga.config.json"
+CFG="$H/.config/opencode/GIGGA/GIGGA.config.json"
 AG="$H/.config/opencode/agents"
 MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
 [ -n "$MODEL" ] || MODEL=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -1)
@@ -220,16 +220,16 @@ md "wizard answers:"; code "$(cat "$W_LOG")"
 md "final (wizard summary):"; code "$(final_text "$W_SID")"
 md "config after:"; code "$(cat "$CFG")"
 md "agent file diffs (model lines):"
-code "$(grep -H '^model:' "$AG"/gigga-worker-*.md "$AG"/gigga.md)"
+code "$(grep -H '^model:' "$AG"/GIGGA-worker-*.md "$AG"/GIGGA.md)"
 G1_OK=0
 if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("configured") and all("kimi" in v for v in c["tiers"].values()) else 1)' "$CFG" \
-   && grep -q "model: kimi" "$AG/gigga-worker-low.md" && grep -q "^model: kimi" "$AG/gigga.md"; then
+   && grep -q "model: kimi" "$AG/GIGGA-worker-low.md" && grep -q "^model: kimi" "$AG/GIGGA.md"; then
   md "**G1: PASS** — config written + configured, worker/orchestrator model lines updated"; G1_OK=1
 else
   # one retry: nudge the orchestrator to actually run the wizard agent
-  md "wizard incomplete — nudging once (spawn gigga-config now)"
+  md "wizard incomplete — nudging once (spawn GIGGA-config now)"
   curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
-    -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Continue the setup wizard NOW: spawn the gigga-config agent in this turn and complete configuration with me."}]}' -o /dev/null
+    -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Continue the setup wizard NOW: spawn the GIGGA-config agent in this turn and complete configuration with me."}]}' -o /dev/null
   (
     while :; do
       reply_question "$W_SID" kimi && continue
@@ -245,7 +245,7 @@ else
   md "retry answers:"; code "$(cat "$W_LOG")"
   md "retry final:"; code "$(final_text "$W_SID")"
   if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("configured") and all("kimi" in v for v in c["tiers"].values()) else 1)' "$CFG" \
-     && grep -q "model: kimi" "$AG/gigga-worker-low.md"; then
+     && grep -q "model: kimi" "$AG/GIGGA-worker-low.md"; then
     md "**G1: PASS (on retry)**"; G1_OK=1
   else
     md "**G1: FAIL via agent — bootstrapping via the shared CLI so the edge cases can run; wizard transcript above stands as evidence**"
@@ -271,7 +271,7 @@ md "answer sent: $r"
 watch "$E1_SID" 240 first >/dev/null
 md "tasks:"; code "$(tasks_for "$E1_SID")"
 md "final:"; code "$(final_text "$E1_SID")"
-if tasks_for "$E1_SID" | grep -q gigga-fasttrack; then
+if tasks_for "$E1_SID" | grep -q GIGGA-fasttrack; then
   md "**E1: PASS** — question answered 'fasttrack' → routed to fasttrack agent"
 else
   md "**E1: CHECK** — see tasks/final"
@@ -302,9 +302,9 @@ json.dump(d, open(p, "w"), indent=2)
 PY
 bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
 start_server
-PROBE=$(sess_new "$FX" gigga-fasttrack)   # session creation loads the plugin
+PROBE=$(sess_new "$FX" GIGGA-fasttrack)   # session creation loads the plugin
 curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"gigga-fasttrack","parts":[{"type":"text","text":"Reply with just: ok"}]}' -o /dev/null
+  -d '{"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Reply with just: ok"}]}' -o /dev/null
 sleep 15
 md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"],a["status"],a["task"][-30:]) for a in d["agents"]])' "$E2STATE")"
 if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2STATE"; then
@@ -321,7 +321,7 @@ import json, sys
 p = sys.argv[1]; c = json.load(open(p)); c["autoRetry"] = True
 json.dump(c, open(p, "w"), indent=2)
 PY
-for f in "$AG"/gigga-worker-*.md; do
+for f in "$AG"/GIGGA-worker-*.md; do
   sed -i '/^You are a GIGGA worker agent./i\
 TEST MODE: always report Status: blocked with reason "injected failure"; do no work at all.' "$f"
 done
@@ -331,12 +331,12 @@ E3_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E3_SID/prompt_async" -H 'content-type: application/json' \
   -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two things: add input validation to parseConfig in lib/parser.js, and add a JSDoc block above it."}]}' -o /dev/null
 watch "$E3_SID" 480 first >/dev/null
-E3_WAVES=$(tasks_for "$E3_SID" | grep -c gigga-worker)
+E3_WAVES=$(tasks_for "$E3_SID" | grep -c GIGGA-worker)
 md "worker spawns (initial + retries): $E3_WAVES (must be ≤ 3 = 1 + 2 auto-retries)"
 md "checker verdicts: $(checker_verdicts | tr '\n' ' ')"
 md "final:"; code "$(final_text "$E3_SID")"
 if [ "$E3_WAVES" -le 3 ]; then md "**E3: PASS** — bounded retries, no infinite loop"; else md "**E3: FAIL** — exceeded 2 auto-retries"; fi
-for f in "$AG"/gigga-worker-*.md; do sed -i '/^TEST MODE: always report Status: blocked/d' "$f"; done
+for f in "$AG"/GIGGA-worker-*.md; do sed -i '/^TEST MODE: always report Status: blocked/d' "$f"; done
 
 # ===================================================== EDGE 4: maxParallel ==
 md ""
@@ -350,7 +350,7 @@ E4_SID=$(sess_new "$FX")
 curl -s -X POST "$BASE/session/$E4_SID/prompt_async" -H 'content-type: application/json' \
   -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two independent changes: add a round() helper to src/calc.ts; add a farewell(name) function to src/greet.ts."}]}' -o /dev/null
 watch "$E4_SID" 420 first >/dev/null
-E4_TASKS=$(tasks_for "$E4_SID"); E4_W=$(echo "$E4_TASKS" | grep -c gigga-worker)
+E4_TASKS=$(tasks_for "$E4_SID"); E4_W=$(echo "$E4_TASKS" | grep -c GIGGA-worker)
 md "workers spawned: $E4_W (maxParallel=10)"; code "$E4_TASKS"
 md "final:"; code "$(final_text "$E4_SID")"
 if [ "$E4_W" -ge 2 ]; then md "**E4: PASS** — all tasks ran, no error"; else md "**E4: CHECK**"; fi
@@ -398,7 +398,7 @@ if [ "$(checker_verdicts | tail -1)" = "PASS" ]; then md "**E6: PASS** — works
 # ===================================================== EDGE 7: worker error =
 md ""
 md "## Edge 7 — worker fails mid-task"
-for f in "$AG"/gigga-worker-*.md; do
+for f in "$AG"/GIGGA-worker-*.md; do
   sed -i '/^You are a GIGGA worker agent./i\
 TEST MODE: immediately report Status: blocked with reason "injected failure"; do no work at all.' "$f"
 done
@@ -416,7 +416,7 @@ if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if an
 else
   md "**E7: CHECK** — see state/final"
 fi
-for f in "$AG"/gigga-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
+for f in "$AG"/GIGGA-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
 
 # ===================================================== EDGE 8: rounds = 1 ===
 md ""
@@ -444,13 +444,13 @@ p = sys.argv[1]; c = json.load(open(p)); c["questionRounds"] = 2
 json.dump(c, open(p, "w"), indent=2)
 PY
 
-# ===================================================== /gigga-status =======
+# ===================================================== /GIGGA-status =======
 md ""
-md "## /gigga-status (live project state, agent-formatted)"
+md "## /GIGGA-status (live project state, agent-formatted)"
 ST_JSON=$(cd "$FX" && GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
-ST_SID=$(sess_new "$FX" gigga-fasttrack)
+ST_SID=$(sess_new "$FX" GIGGA-fasttrack)
 curl -s -X POST "$BASE/session/$ST_SID/prompt_async" -H 'content-type: application/json' \
-  -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"gigga-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$ST_JSON")" -o /dev/null
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$ST_JSON")" -o /dev/null
 watch "$ST_SID" 180 none >/dev/null
 code "$(final_text "$ST_SID")"
 

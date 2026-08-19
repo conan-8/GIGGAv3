@@ -47,11 +47,11 @@ test("validateConfig without a model list only checks shape", () => {
 })
 
 test("applyTierModels rewrites worker markers and orchestrator model", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "gigga-agents-"))
+  const dir = await mkdtemp(join(tmpdir(), "GIGGA-agents-"))
   for (const t of ["low", "medium", "high"]) {
     await writeFile(
-      join(dir, `gigga-worker-${t}.md`),
-      `---\ndescription: worker ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by gigga-config -->\n---\nbody\n`,
+      join(dir, `GIGGA-worker-${t}.md`),
+      `---\ndescription: worker ${t}\nmode: subagent\nmodel: anthropic/old   # <!-- set by GIGGA-config -->\n---\nbody\n`,
     )
   }
   await writeFile(join(dir, "GIGGA.md"), `---\ndescription: orch\nmode: primary\ncolor: accent\n---\nbody\n`)
@@ -59,10 +59,10 @@ test("applyTierModels rewrites worker markers and orchestrator model", async () 
   const res = await applyTierModels(dir, { low: "kimi/k3", medium: "kimi/k3", high: "opencode/big-pickle" }, "medium")
   assert.equal(res.filter((r) => r.changed).length, 4)
 
-  const low = await readFile(join(dir, "gigga-worker-low.md"), "utf8")
-  assert.match(low, /^model: kimi\/k3   # <!-- set by gigga-config -->$/m)
-  const high = await readFile(join(dir, "gigga-worker-high.md"), "utf8")
-  assert.match(high, /^model: opencode\/big-pickle   # <!-- set by gigga-config -->$/m)
+  const low = await readFile(join(dir, "GIGGA-worker-low.md"), "utf8")
+  assert.match(low, /^model: kimi\/k3   # <!-- set by GIGGA-config -->$/m)
+  const high = await readFile(join(dir, "GIGGA-worker-high.md"), "utf8")
+  assert.match(high, /^model: opencode\/big-pickle   # <!-- set by GIGGA-config -->$/m)
   const orch = await readFile(join(dir, "GIGGA.md"), "utf8")
   assert.match(orch, /^model: kimi\/k3$/m)
 

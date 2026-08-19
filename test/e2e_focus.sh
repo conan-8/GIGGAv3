@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Focused session-4 rerun: edge 1, 2, 5, 7 + /gigga-status on a real run.
+# Focused session-4 rerun: edge 1, 2, 5, 7 + /GIGGA-status on a real run.
 # (E3/E4/E6/E8 passed in the main session-4 run.)
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 P1=4476; P2=4477
 BASE="http://127.0.0.1:$P1"
-SB="$(mktemp -d /tmp/gigga-foc.XXXXXX)"
+SB="$(mktemp -d /tmp/GIGGA-foc.XXXXXX)"
 H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
 code() { printf '```\n%s\n```\n' "$*"; }
@@ -15,7 +15,7 @@ import hashlib, os, sys
 d, root = sys.argv[1], sys.argv[2]
 slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in os.path.basename(d))[:40] or "project"
 h = hashlib.sha256(d.encode()).hexdigest()[:10]
-print(os.path.join(root, "gigga", "projects", f"{slug}-{h}", "state.json"))
+print(os.path.join(root, "GIGGA", "projects", f"{slug}-{h}", "state.json"))
 ' "$1" "$H/.config/opencode"
 }
 stop_all() { bash "$REPO/test/stop_servers.sh" 4476 4483 4484 >/dev/null 2>&1; sleep 1; }
@@ -28,7 +28,7 @@ cp ~/.local/share/opencode/auth.json "$H/.local/share/opencode/auth.json" 2>/dev
 MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
 [ -n "$MODEL" ] || MODEL=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -1)
 # bootstrap config via the shared CLI (wizard itself is covered by e2e_wizard.sh)
-CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/gigga/gigga.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; print(json.dumps(c))')
+CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/GIGGA/GIGGA.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; print(json.dumps(c))')
 node "$REPO/dashboard/lib/shared.mjs" wizard "$H/.config/opencode" "$CFGJSON" >/dev/null
 python3 - "$H/.config/opencode/opencode.json" <<'PY'
 import json, sys
@@ -48,8 +48,8 @@ start_server() { # start_server <port> <dir> — ONE opencode server PER PROJECT
   : > "$SSE"; curl -sN "http://127.0.0.1:$port/event" >> "$SSE" &
   sleep 2
 }
-sess_new() { curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$1\",\"agent\":\"${2:-gigga}\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'; }
-ask() { curl -s -X POST "$BASE/session/$1/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"'"${2:-gigga}"'","parts":[{"type":"text","text":sys.argv[1]}]}))' "$3")" -o /dev/null -w "%{http_code}"; }
+sess_new() { curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$1\",\"agent\":\"${2:-GIGGA}\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])'; }
+ask() { curl -s -X POST "$BASE/session/$1/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"'"${2:-GIGGA}"'","parts":[{"type":"text","text":sys.argv[1]}]}))' "$3")" -o /dev/null -w "%{http_code}"; }
 : "${ask_dummy:=}"
 sse_json() { python3 - "$SSE" <<'PY'
 import json, sys
@@ -60,7 +60,7 @@ for line in open(sys.argv[1]):
         except Exception: pass
 PY
 }
-answer_first() { # answer newest pending question for any gigga session, with given pick mode
+answer_first() { # answer newest pending question for any GIGGA session, with given pick mode
   local mode="${1:-first}" line rid labels label
   line=$(sse_json | python3 -c '
 import json, sys
@@ -147,7 +147,7 @@ start_server "$P1" "$FX"
 md ""
 md "## Edge 1 — answer a pending question with 'fasttrack'"
 E1=$(sess_new "$FX")
-ask "$E1" gigga "Add a CSV export function to lib/parser.js and document it in README.md." >/dev/null
+ask "$E1" GIGGA "Add a CSV export function to lib/parser.js and document it in README.md." >/dev/null
 R=""
 for _ in $(seq 1 90); do
   R=$(answer_first "label" "fasttrack")
@@ -159,13 +159,13 @@ md "answer: $R"
 watch "$E1" 300 first >/dev/null
 md "tasks:"; code "$(tasks_for "$E1")"
 md "final:"; code "$(final_text "$E1")"
-if tasks_for "$E1" | grep -q gigga-fasttrack; then md "**E1: PASS**"; else md "**E1: CHECK**"; fi
+if tasks_for "$E1" | grep -q GIGGA-fasttrack; then md "**E1: PASS**"; else md "**E1: CHECK**"; fi
 
 # ============================================================ EDGE 2 ======
 md ""
 md "## Edge 2 — kill -9 mid-execution"
 E2=$(sess_new "$FX")
-ask "$E2" gigga "Add input validation to parseArgs in src/argv-parser.ts and a shout() function in src/greet.ts." >/dev/null
+ask "$E2" GIGGA "Add input validation to parseArgs in src/argv-parser.ts and a shout() function in src/greet.ts." >/dev/null
 E2S=$(pstate "$FX")
 for _ in $(seq 1 120); do
   answer_first first >/dev/null 2>&1
@@ -190,8 +190,8 @@ d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).is
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start_server "$P1" "$FX"
-PROBE=$(sess_new "$FX" gigga-fasttrack)
-ask "$PROBE" gigga-fasttrack "Reply with just: ok" >/dev/null
+PROBE=$(sess_new "$FX" GIGGA-fasttrack)
+ask "$PROBE" GIGGA-fasttrack "Reply with just: ok" >/dev/null
 sleep 20
 md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"], a["status"], a["task"][-28:]) for a in d["agents"]])' "$E2S")"
 if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2S"; then
@@ -207,14 +207,14 @@ FX2="$SB/fx2"; mk_fx "$FX2"
 # project 1 run (server rooted in fx1)
 start_server "$P1" "$FX"
 E5A=$(sess_new "$FX")
-ask "$E5A" gigga "Add a clamp(a,min,max) helper to src/calc.ts." >/dev/null
+ask "$E5A" GIGGA "Add a clamp(a,min,max) helper to src/calc.ts." >/dev/null
 watch "$E5A" 360 first >/dev/null
 md "fx1 tasks: $(tasks_for "$E5A" | tr '\n' ' ')"
 stop_all
 # project 2 run (server rooted in fx2)
 start_server "$P2" "$FX2"
-E5B=$(sess_new "$FX2" gigga)
-ask "$E5B" gigga "Add a slug(text) function to lib/util.js." >/dev/null
+E5B=$(sess_new "$FX2" GIGGA)
+ask "$E5B" GIGGA "Add a slug(text) function to lib/util.js." >/dev/null
 watch "$E5B" 360 first >/dev/null
 md "fx2 tasks: $(tasks_for "$E5B" | tr '\n' ' ')"
 stop_all
@@ -242,13 +242,13 @@ fi
 start_server "$P1" "$FX"
 
 ## Edge 7 — worker fails mid-task"
-for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do
+for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do
   sed -i '/^You are a GIGGA worker agent./i\
 TEST MODE: immediately report Status: blocked with reason "injected failure"; do no work at all.' "$f"
 done
 start_server "$P1" "$FX"
 E7=$(sess_new "$FX")
-ask "$E7" gigga "Add an average(list) function to src/calc.ts." >/dev/null
+ask "$E7" GIGGA "Add an average(list) function to src/calc.ts." >/dev/null
 watch "$E7" 420 first >/dev/null
 E7S=$(pstate "$FX")
 E7_MISSING=0; [ -f "$E7S" ] || E7_MISSING=1
@@ -261,21 +261,21 @@ elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if 
 else
   md "**E7: CHECK**"
 fi
-for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
+for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
 
 # ============================================================ STATUS ======
 md ""
-md "## /gigga-status from a real run"
+md "## /GIGGA-status from a real run"
 start_server "$P1" "$FX"
 ST=$(sess_new "$FX")
-ask "$ST" gigga "Add a median(list) function to src/calc.ts." >/dev/null
+ask "$ST" GIGGA "Add a median(list) function to src/calc.ts." >/dev/null
 watch "$ST" 300 first >/dev/null
 ST_JSON=$(GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
 md "state JSON:"; code "$(echo "$ST_JSON" | python3 -m json.tool | head -30)"
-STS=$(sess_new "$FX" gigga-fasttrack)
-ask "$STS" gigga-fasttrack "Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: $ST_JSON" >/dev/null
+STS=$(sess_new "$FX" GIGGA-fasttrack)
+ask "$STS" GIGGA-fasttrack "Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: $ST_JSON" >/dev/null
 watch "$STS" 180 none >/dev/null
-md "agent-formatted /gigga-status output:"; code "$(final_text "$STS")"
+md "agent-formatted /GIGGA-status output:"; code "$(final_text "$STS")"
 
 md ""
 md "--- end of focused rerun ---"

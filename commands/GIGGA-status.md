@@ -1,6 +1,6 @@
 ---
 description: GIGGA status — current phase, agent table, pending-question state for this project
-agent: gigga-fasttrack
+agent: GIGGA-fasttrack
 ---
 
 Print GIGGA's live status for THIS project (this exact prompt already
@@ -11,10 +11,10 @@ Formatting rules:
 - If `originalRequest` is non-empty, quote it (first 100 chars).
 - Then a table of `agents`: columns number/kind, tier, status, task
   (truncate to 60 chars), session id (or `-`).
-- If `agents` is empty: "No GIGGA run in this project yet — Tab to gigga and
+- If `agents` is empty: "No GIGGA run in this project yet — Tab to GIGGA and
   make a request."
 - No file edits, no follow-up questions.
 
 State JSON:
 
-!`node "$HOME/.config/opencode/gigga/dashboard/lib/shared.mjs" status "$PWD" 2>/dev/null || echo '{"agents":[],"phase":"idle","pendingQuestion":false}'`
+!`node "$HOME/.config/opencode/GIGGA/dashboard/lib/shared.mjs" status "$PWD" 2>/dev/null || echo '{"agents":[],"phase":"idle","pendingQuestion":false}'`

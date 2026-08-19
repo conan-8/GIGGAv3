@@ -30,13 +30,14 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const GIGGA_HOME = process.env.GIGGA_HOME ?? join(os.homedir(), ".config", "opencode")
-const GIGGA_DIR = join(GIGGA_HOME, "gigga")
+const GIGGA_DIR = join(GIGGA_HOME, "GIGGA")
 const DATA_DIR = process.env.GIGGA_DATA_DIR ?? join(os.homedir(), ".local", "share", "opencode")
 // The dashboard serves ONE project: the directory it was launched from
 // (override with GIGGA_PROJECT_DIR — used by the e2e driver).
 const PROJECT_DIR = process.env.GIGGA_PROJECT_DIR ?? process.cwd()
 const STATE_FILE = projectStatePath(PROJECT_DIR, GIGGA_HOME)
-const CONFIG_FILE = join(GIGGA_DIR, "gigga.config.json")
+const CONFIG_FILE = join(GIGGA_DIR, "GIGGA.config.json")
+const LEGACY_CONFIG_FILE = join(GIGGA_HOME, "gigga", "gigga.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
 const FLAG_FILE = join(GIGGA_DIR, "fasttrack.flag")
 const PUBLIC_DIR = join(HERE, "public")
@@ -66,6 +67,7 @@ const json = (res, code, body) => {
 async function readJson(file) {
   try { return JSON.parse(await readFile(file, "utf8")) } catch { return null }
 }
+const configFile = () => (existsSync(CONFIG_FILE) ? CONFIG_FILE : existsSync(LEGACY_CONFIG_FILE) ? LEGACY_CONFIG_FILE : CONFIG_FILE)
 
 async function readServerInfo() {
   const s = await readJson(SERVER_FILE)
@@ -180,14 +182,14 @@ async function handle(req, res) {
 
   // -- API
   if (path === "/api/state" && req.method === "GET") {
-    const [state, server, cfgExists] = await Promise.all([readStateRaw(), readServerInfo(), existsSync(CONFIG_FILE)])
+    const [state, server, cfgExists] = await Promise.all([readStateRaw(), readServerInfo(), existsSync(configFile())])
     return json(res, 200, {
       view: mergeStateView(state, {}),
       state,
       server,
       hasRun: hasGiggaRun(state),
-      configExists: existsSync(CONFIG_FILE),
-      configured: !!(cfgExists && (await readJson(CONFIG_FILE))?.configured),
+      configExists: existsSync(configFile()),
+      configured: !!(cfgExists && (await readJson(configFile()))?.configured),
       project: PROJECT_DIR,
     })
   }
@@ -229,10 +231,10 @@ async function handle(req, res) {
   }
 
   if (path === "/api/config" && req.method === "GET") {
-    const cfg = await readJson(CONFIG_FILE)
+    const cfg = await readJson(configFile())
     const server = await readServerInfo()
     const models = await listModels({ serverUrl: server.reachable ? server.url : null })
-    return json(res, 200, { config: cfg, configExists: existsSync(CONFIG_FILE), configured: !!cfg?.configured, models, defaults: defaultConfig(), cheatSheet: CHEAT_SHEET })
+    return json(res, 200, { config: cfg, configExists: existsSync(configFile()), configured: !!cfg?.configured, models, defaults: defaultConfig(), cheatSheet: CHEAT_SHEET })
   }
 
   if (path === "/api/config" && req.method === "POST") {

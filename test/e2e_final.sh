@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Final micro-verifications: E7 (worker failure surfaced) + /gigga-status paste.
+# Final micro-verifications: E7 (worker failure surfaced) + /GIGGA-status paste.
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 P=4479; BASE="http://127.0.0.1:$P"
-SB="$(mktemp -d /tmp/gigga-fin.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
+SB="$(mktemp -d /tmp/GIGGA-fin.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
 code() { printf '```\n%s\n```\n' "$*"; }
 trap 'bash "$REPO/test/stop_servers.sh" 4479' EXIT
@@ -12,7 +12,7 @@ mkdir -p "$H/.config" "$H/.local/share/opencode"
 GIGGA_HOME="$H/.config/opencode" GIGGA_SRC="$REPO" bash "$REPO/install.sh" >/dev/null
 cp ~/.local/share/opencode/auth.json "$H/.local/share/opencode/auth.json"
 MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
-CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/gigga/gigga.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; print(json.dumps(c))')
+CFGJSON=$(python3 -c 'import json; c=json.load(open("'"$H"'/.config/opencode/GIGGA/GIGGA.config.json")); c["tiers"]={"low":"'"$MODEL"'","medium":"'"$MODEL"'","high":"'"$MODEL"'"}; print(json.dumps(c))')
 node "$REPO/dashboard/lib/shared.mjs" wizard "$H/.config/opencode" "$CFGJSON" >/dev/null
 python3 - "$H/.config/opencode/opencode.json" <<'PY'
 import json, sys
@@ -24,7 +24,7 @@ json.dump(cfg,open(p,"w"),indent=2)
 PY
 FX="$SB/fx"; mkdir -p "$FX"; cp -r "$REPO/test/fixtures/." "$FX/"
 git -C "$FX" init -q && git -C "$FX" add -A && git -C "$FX" -c user.email=f@t -c user.name=f commit -qm init
-for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do
+for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do
   sed -i '/^You are a GIGGA worker agent./i\
 TEST MODE: immediately report Status: blocked with reason "injected failure"; do no work at all.' "$f"
 done
@@ -82,7 +82,7 @@ print("1" if st=="idle" else "")
 PY
 }
 md "## E7 — worker fails mid-task (sabotaged worker reports blocked)"
-SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
 W=0
 while [ $W -lt 420 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
@@ -91,16 +91,16 @@ import hashlib, os, sys
 d, root = sys.argv[1], sys.argv[2]
 slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in os.path.basename(d))[:40] or "project"
 h = hashlib.sha256(d.encode()).hexdigest()[:10]
-print(os.path.join(root, "gigga", "projects", f"{slug}-{h}", "state.json"))
+print(os.path.join(root, "GIGGA", "projects", f"{slug}-{h}", "state.json"))
 ' "$FX" "$H/.config/opencode")
 md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$ST" 2>/dev/null || echo none)"
 md "final:"; code "$(ft "$SID")"
-for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
+for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
 
-md "## /gigga-status — live project state (CLI + agent-formatted)"
+md "## /GIGGA-status — live project state (CLI + agent-formatted)"
 STJ=$(GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
-S2=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$S2/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"gigga-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$STJ")" -o /dev/null
+S2=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -s -X POST "$BASE/session/$S2/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$STJ")" -o /dev/null
 W=0
 while [ $W -lt 180 ]; do [ -n "$(idle "$S2" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 code "$(ft "$S2")"

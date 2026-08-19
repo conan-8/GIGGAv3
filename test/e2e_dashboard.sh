@@ -4,7 +4,7 @@
 # verification itself is driven separately (see test/e2e.md scenario F).
 #
 # Usage:  bash test/e2e_dashboard.sh setup   -> prints "SB <dir>"
-#         bash test/e2e_dashboard.sh prompt <text>  -> sends a gigga prompt
+#         bash test/e2e_dashboard.sh prompt <text>  -> sends a GIGGA prompt
 #         bash test/e2e_dashboard.sh answer           -> answers pending question (first option)
 #         bash test/e2e_dashboard.sh stop
 set -u
@@ -12,10 +12,10 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 PORT="${GIGGA_DASH_OC_PORT:-4470}"
 BASE="http://127.0.0.1:$PORT"
 
-SB_FILE=/tmp/gigga-dash-e2e.sb
+SB_FILE=/tmp/GIGGA-dash-e2e.sb
 
 do_setup() {
-  SB=$(mktemp -d /tmp/gigga-dash-e2e.XXXXXX)
+  SB=$(mktemp -d /tmp/GIGGA-dash-e2e.XXXXXX)
   echo "$SB" > $SB_FILE
   H="$SB/home"; FX="$SB/fixture"
   mkdir -p "$H/.config" "$H/.local/share/opencode"
@@ -23,10 +23,10 @@ do_setup() {
   cp ~/.local/share/opencode/auth.json "$H/.local/share/opencode/auth.json" 2>/dev/null || echo "WARN no auth"
   MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
   [ -n "$MODEL" ] || MODEL=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -1)
-  for f in "$H"/.config/opencode/agents/gigga-worker-*.md; do
-    sed -i -E "s|^model: .*# (<!-- set by gigga-config -->)|model: $MODEL   # \1|" "$f"
+  for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do
+    sed -i -E "s|^model: .*# (<!-- set by GIGGA-config -->)|model: $MODEL   # \1|" "$f"
   done
-  python3 - "$H/.config/opencode/gigga/gigga.config.json" "$MODEL" <<'PY'
+  python3 - "$H/.config/opencode/GIGGA/GIGGA.config.json" "$MODEL" <<'PY'
 import json, sys
 p, model = sys.argv[1], sys.argv[2]
 cfg = json.load(open(p)); cfg["tiers"] = {"low": model, "medium": model, "high": model}
@@ -54,7 +54,7 @@ PY
   : > "$SB/sse.log"
   curl -sN "$BASE/event" >> "$SB/sse.log" &
   SESS=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' \
-    -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+    -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
   echo "$SESS" > "$SB/session"
   echo "SB $SB"
   echo "HOME $H"

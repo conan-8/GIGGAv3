@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Wizard-only E2E (gate 1): fresh sandbox, agent-driven setup, evidence to
-# stdout. Answers ANY pending gigga question (wizard questions come from the
-# gigga-config subagent's session, not the orchestrator's).
+# stdout. Answers ANY pending GIGGA question (wizard questions come from the
+# GIGGA-config subagent's session, not the orchestrator's).
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 PORT="${GIGGA_WIZ_PORT:-4475}"
 BASE="http://127.0.0.1:$PORT"
-SB="$(mktemp -d /tmp/gigga-wiz.XXXXXX)"
+SB="$(mktemp -d /tmp/GIGGA-wiz.XXXXXX)"
 H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
 code() { printf '```\n%s\n```\n' "$*"; }
@@ -35,16 +35,16 @@ sleep 2
 MODEL=$(HOME=$H opencode models 2>/dev/null | grep '^kimi-for-coding/' | head -1)
 [ -n "$MODEL" ] || MODEL=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -1)
 md "sandbox model: $MODEL"
-CFG="$H/.config/opencode/gigga/gigga.config.json"
+CFG="$H/.config/opencode/GIGGA/GIGGA.config.json"
 AG="$H/.config/opencode/agents"
 
 W_SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' \
-  -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 md "session: $W_SID"
 curl -s -X POST "$BASE/session/$W_SID/prompt_async" -H 'content-type: application/json' \
   -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Set up GIGGA now — run the setup wizard with me."}]}' -o /dev/null
 
-# answer ANY pending question from any gigga session (wizard asks from its subagent session)
+# answer ANY pending question from any GIGGA session (wizard asks from its subagent session)
 answer_any() {
   local line rid labels label
   line=$(python3 - "$SSE" <<'PY'
@@ -150,14 +150,14 @@ db.close();
 }
 md "orchestrator final:"; code "$(final_text)"
 md "config after:"; code "$(cat "$CFG")"
-md "agent model lines:"; code "$(grep -H '^model:' "$AG"/gigga-worker-*.md "$AG/gigga.md")"
+md "agent model lines:"; code "$(grep -H '^model:' "$AG"/GIGGA-worker-*.md "$AG/GIGGA.md")"
 if python3 -c '
 import json, sys
 c = json.load(open(sys.argv[1]))
 ok = c.get("configured") and all(not v.startswith("anthropic/claude-") for v in c["tiers"].values())
 sys.exit(0 if ok else 1)' "$CFG" \
-   && grep -q "set by gigga-config" "$AG/gigga-worker-low.md" \
-   && ! grep -q "model: anthropic/claude-haiku" "$AG/gigga-worker-low.md"; then
+   && grep -q "set by GIGGA-config" "$AG/GIGGA-worker-low.md" \
+   && ! grep -q "model: anthropic/claude-haiku" "$AG/GIGGA-worker-low.md"; then
   md "**WIZARD: PASS** — guided setup wrote config + agent files"
 else
   md "**WIZARD: CHECK/FAIL** — inspect above"

@@ -1,5 +1,5 @@
 // Shared GIGGA logic used by the dashboard server (and reusable by any
-// future tooling — the gigga-config agent performs the same rewrites by
+// future tooling — the GIGGA-config agent performs the same rewrites by
 // instruction; keep the semantics identical).
 //
 // Zero dependencies, runs under node >= 20 and bun.
@@ -12,12 +12,12 @@ import { fileURLToPath } from "node:url"
 export const TIERS = ["low", "medium", "high"]
 
 // ------------------------------------------------------ per-project state --
-// MUST stay in sync with projectStatePath in plugin/gigga.ts — a conformance
+// MUST stay in sync with projectStatePath in plugin/GIGGA.ts — a conformance
 // test (dashboard/test/parity.test.mjs) imports both and asserts equality.
 export function projectStatePath(projectDir, cfgRoot) {
   const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
   const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
-  return join(cfgRoot, "gigga", "projects", `${slug}-${hash}`, "state.json")
+  return join(cfgRoot, "GIGGA", "projects", `${slug}-${hash}`, "state.json")
 }
 
 // If state says agents are "working" but nothing has updated it for
@@ -109,15 +109,15 @@ export function defaultConfig() {
 }
 
 // ------------------------------------------------- worker model rewriting --
-// Rewrites the `model:` lines of the gigga agent files to the chosen tier
+// Rewrites the `model:` lines of the GIGGA agent files to the chosen tier
 // models. Worker files carry the machine marker comment; the orchestrator's
 // plain `model:` line is inserted after `mode:` when absent.
 export async function applyTierModels(agentsDir, tiers, defaultTier) {
   const results = []
   for (const tier of TIERS) {
-    const file = join(agentsDir, `gigga-worker-${tier}.md`)
-    const res = await rewriteModelLine(file, `model: ${tiers[tier]}   # <!-- set by gigga-config -->`)
-    results.push({ file: `gigga-worker-${tier}.md`, ...res })
+    const file = join(agentsDir, `GIGGA-worker-${tier}.md`)
+    const res = await rewriteModelLine(file, `model: ${tiers[tier]}   # <!-- set by GIGGA-config -->`)
+    results.push({ file: `GIGGA-worker-${tier}.md`, ...res })
   }
   const orch = join(agentsDir, "GIGGA.md")
   const res = await rewriteModelLine(orch, `model: ${tiers[defaultTier]}`, { afterKey: "mode" })
@@ -232,7 +232,7 @@ export const CHEAT_SHEET = [
 ]
 
 // ------------------------------------------------------------------ CLI ----
-// Shared tooling used by BOTH the dashboard server and the gigga-config
+// Shared tooling used by BOTH the dashboard server and the GIGGA-config
 // agent (the agent shells out to these — one implementation, no forks):
 //   node shared.mjs validate <config.json> [modelsFile]
 //   node shared.mjs apply     <agentsDir> <config.json>
@@ -265,9 +265,9 @@ if (process.argv[1] && process.argv[1].endsWith("shared.mjs") && process.argv.le
       const v = validateConfig(cfg)
       if (!v.ok) { out({ ok: false, errors: v.errors }); process.exit(1) }
       cfg.configured = true
-      const giggaDir = join(cfgRoot, "gigga")
-      await mkdir(giggaDir, { recursive: true })
-      const cfgFile = join(giggaDir, "gigga.config.json")
+      const GIGGADir = join(cfgRoot, "GIGGA")
+      await mkdir(GIGGADir, { recursive: true })
+      const cfgFile = join(GIGGADir, "GIGGA.config.json")
       try { await stat(cfgFile); await rename(cfgFile, `${cfgFile}.backup-${Date.now()}`) } catch {}
       await writeFile(cfgFile, JSON.stringify(cfg, null, 2) + "\n")
       const agentUpdates = await applyTierModels(join(cfgRoot, "agents"), cfg.tiers, cfg.defaultTier)

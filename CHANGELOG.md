@@ -6,13 +6,13 @@ First tagged release. Full spec implemented and audited
 (`test/COMPLIANCE.md`).
 
 ### Added
-- Orchestrator agent pack for opencode: `gigga` primary agent (Tab cycle),
-  read-only `gigga-recon` / `gigga-checker`, one-shot `gigga-fasttrack`,
-  scope-limited `gigga-config`, and `gigga-worker-low/medium/high`.
+- Orchestrator agent pack for opencode: `GIGGA` primary agent (Tab cycle),
+  read-only `GIGGA-recon` / `GIGGA-checker`, one-shot `GIGGA-fasttrack`,
+  scope-limited `GIGGA-config`, and `GIGGA-worker-low/medium/high`.
 - Orchestration loop: classify → fasttrack or recon → ≤ N question rounds
   (plugin-enforced) → todo plan → numbered parallel/sequential workers →
   read-only check → ask/auto-retry (≤ 2) with gap-only fixes.
-- Plugin: per-project state machine (`gigga/projects/<slug>-<hash>/state.json`,
+- Plugin: per-project state machine (`GIGGA/projects/<slug>-<hash>/state.json`,
   atomic writes, multi-instance safe), pending-question bell + TUI toast,
   phase toasts, question-round cap via `tool.execute.before`, stale-run
   recovery, server discovery (`server.json`).
@@ -21,14 +21,14 @@ First tagged release. Full spec implemented and audited
   fasttrack button, config screen; HTTP + SQLite disk fallback.
 - Setup: conversational wizard (agent + dashboard + shared CLI, one
   implementation), `configured` first-run gate, cheat sheet.
-- Commands: /gigga-setup, /gigga-fasttrack, /gigga-retry, /gigga-status.
+- Commands: /GIGGA-setup, /GIGGA-fasttrack, /GIGGA-retry, /GIGGA-status.
 - Installer: one-line curl|bash, idempotent, timestamped backups, config
   never overwritten; uninstaller restores opencode.json.
 - Test suite: 17 unit tests + scripted E2E (scenarios A–F, edges, soak,
   compliance evidence) with real transcripts under test/results/.
 
 ### Changed
-- Orchestrator agent renamed `gigga` → `GIGGA` (all-caps, red #f7768e in the
+- Orchestrator agent renamed `GIGGA` → `GIGGA` (all-caps, red #f7768e in the
   Tab cycle); all internal references updated and re-verified.
 
 ### Known limitations

@@ -4,7 +4,7 @@
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 P=4488; BASE="http://127.0.0.1:$P"
-SB="$(mktemp -d /tmp/gigga-cmp.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
+SB="$(mktemp -d /tmp/GIGGA-cmp.XXXXXX)"; H="$SB/home"; SSE="$SB/sse.log"
 md() { printf '%s\n' "$*"; }
 code() { printf '```\n%s\n```\n' "$*"; }
 trap 'bash "$REPO/test/stop_servers.sh" 4488' EXIT
@@ -18,7 +18,7 @@ MODELS=$(HOME=$H opencode models 2>/dev/null | grep '/' | head -5)
 M_LO=$(echo "$MODELS" | sed -n 1p); M_MED=$(echo "$MODELS" | sed -n 2p); M_HI=$(echo "$MODELS" | sed -n 3p)
 [ -n "$M_HI" ] || { M_MED="$M_LO"; M_HI="$M_LO"; }
 md "tier models: low=$M_LO medium=$M_MED high=$M_HI"
-python3 - "$H/.config/opencode/gigga/gigga.config.json" <<PY
+python3 - "$H/.config/opencode/GIGGA/GIGGA.config.json" <<PY
 import json, sys
 p = sys.argv[1]
 c = json.load(open(p))
@@ -101,17 +101,17 @@ print(t[-1] if t else "(none)")
 # ---------------------------------------------- sub-subagent delegation ----
 md ""
 md "## Sub-subagent delegation (subagent_depth: 2)"
-SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -s -X POST "$BASE/session/$SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Audit every module in lib/ and src/: one worker per area, and each worker MUST use its own sub-subagents (you have subagent_depth 2) to search the files in parallel — instruct them explicitly to do so. Deliverable: a table of module -> exported functions. This is a wide search task; delegation is required, not optional."}]}' -o /dev/null
 W=0
 while [ $W -lt 600 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 md "final:"; code "$(ft "$SID")"
-# grandchild sessions: sessions whose parent is NOT the orchestrator but a gigga-worker session
+# grandchild sessions: sessions whose parent is NOT the orchestrator but a GIGGA-worker session
 node --no-warnings -e "
 const {DatabaseSync}=require('node:sqlite');
 const db=new DatabaseSync('$H/.local/share/opencode/opencode.db',{readOnly:true});
 const orch='$SID';
-const workers=db.prepare('select id, agent from session where parent_id=?').all(orch).filter(s=>/gigga-worker/.test(s.agent||''));
+const workers=db.prepare('select id, agent from session where parent_id=?').all(orch).filter(s=>/GIGGA-worker/.test(s.agent||''));
 console.log('worker sessions:', workers.map(w=>w.id+'('+w.agent+')').join(', ') || 'none');
 for(const w of workers){
   const kids=db.prepare('select id, agent from session where parent_id=?').all(w.id);
@@ -134,7 +134,7 @@ if [ "${GC:-0}" -ge 1 ]; then md "**DELEGATION: PASS**"; else md "**DELEGATION: 
 # ------------------------------------------------------- tier selection ----
 md ""
 md "## Tier selection by difficulty"
-TIER_SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"gigga\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+TIER_SID=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -s -X POST "$BASE/session/$TIER_SID/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Two changes: (1) trivial: add a minus(a,b) function to src/calc.ts; (2) hard: refactor lib/mod1.js through lib/mod12.js into a single consolidated module with a compatibility shim re-exporting every helper, keeping all imports working — use a high-tier worker for the hard one."}]}' -o /dev/null
 W=0
 while [ $W -lt 600 ]; do ans >/dev/null 2>&1; [ -n "$(idle "$TIER_SID" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
@@ -151,12 +151,12 @@ for line in open(sys.argv[1]):
     if part.get("type") != "tool" or part.get("tool") != "task": continue
     if p.get("sessionID") != sys.argv[2]: continue
     t = part.get("state", {}).get("input", {}).get("subagent_type", "")
-    if t.startswith("gigga-worker-") and t not in seen: seen.append(t)
+    if t.startswith("GIGGA-worker-") and t not in seen: seen.append(t)
 print(" ".join(seen))
 PY
  "$SSE" "$TIER_SID")
 md "worker tiers used: $TIERS_USED (low+high mix expected: trivial→low/default, hard→high)"
-if echo "$TIERS_USED" | grep -q "gigga-worker-high" && [ "$(echo "$TIERS_USED" | wc -w)" -ge 2 ]; then
+if echo "$TIERS_USED" | grep -q "GIGGA-worker-high" && [ "$(echo "$TIERS_USED" | wc -w)" -ge 2 ]; then
   md "**TIERS: PASS** — difficulty-based tier spread observed"
 else
   md "**TIERS: CHECK** — see tiers used (orchestrator discretion; default tier alone is compliant)"

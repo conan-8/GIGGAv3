@@ -1,5 +1,5 @@
 # GIGGA E2E results — 2026-08-18T21:33:00Z
-opencode 1.18.18 | sandbox: /tmp/gigga-e2e.dI0p45 (kept only with GIGGA_E2E_KEEP=1)
+opencode 1.18.18 | sandbox: /tmp/GIGGA-e2e.dI0p45 (kept only with GIGGA_E2E_KEEP=1)
 Sandbox model override: kimi-for-coding/k3
 
 ## Scenario A — simple recon question → fasttrack
@@ -7,7 +7,7 @@ session: ses_fe935269affey3RJgmIu5Bi7RG
 request: `What does parseConfig in lib/parser.js do?`
 tasks spawned:
 ```
-gigga-fasttrack completed
+GIGGA-fasttrack completed
 ```
 question rounds: 0 (expect 0)
 final answer:
@@ -52,11 +52,11 @@ answered question [que_016cc9ec60018yUbU6GyZElvST] with: Full strictness (Recomm
 question interaction rounds: 4 (expect ≤2); raw question.asked events: 1
 tasks spawned:
 ```
-gigga-recon completed
-gigga-recon completed
-gigga-worker-medium completed
-gigga-worker-medium completed
-gigga-checker completed
+GIGGA-recon completed
+GIGGA-recon completed
+GIGGA-worker-medium completed
+GIGGA-worker-medium completed
+GIGGA-checker completed
 ```
 checker verdicts: PASS 
 state snapshot DURING execution:
@@ -122,13 +122,13 @@ state snapshot DURING execution:
   },
   "sessions": {
     "ses_fe934040bffeO7xsgt2YPK7pu1": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe9346740ffes6C3vbZeIDyjbb": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe932773bffeCDetRTUl5hcVlH": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe9346740ffes6C3vbZeIDyjbb"
     }
   },
@@ -231,21 +231,21 @@ state snapshot near END:
   },
   "sessions": {
     "ses_fe934040bffeO7xsgt2YPK7pu1": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe9346740ffes6C3vbZeIDyjbb": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe932773bffeCDetRTUl5hcVlH": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe9346740ffes6C3vbZeIDyjbb"
     },
     "ses_fe93242c0ffeEl9nFLykiLriLo": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe9346740ffes6C3vbZeIDyjbb"
     },
     "ses_fe92ff35fffegG6HjZtO5z6UGD": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe9346740ffes6C3vbZeIDyjbb"
     }
   },
@@ -333,10 +333,10 @@ max concurrent working workers sampled in state.json: 0
 worker interval overlaps from event stream: 0 (must be 0; workers seen: 2)
 tasks spawned (order matters):
 ```
-gigga-recon completed
-gigga-worker-medium completed
-gigga-worker-medium completed
-gigga-checker completed
+GIGGA-recon completed
+GIGGA-worker-medium completed
+GIGGA-worker-medium completed
+GIGGA-checker completed
 ```
 final answer:
 ```
@@ -542,29 +542,29 @@ fixture diff after retry:
   },
   "sessions": {
     "ses_fe926691affeYOVJxgsCVAKMCs": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe926b1aeffe85oukMwMrW0Nxd": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe924fc35ffedW0E6PK8mY3F9S": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
     },
     "ses_fe92445ceffetto7DU5CA9p1l3": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
     },
     "ses_fe9234f15ffekQ7WHy8PxJ9gN9": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
     },
     "ses_fe921dd85ffefvoQPP7w28TlXv": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
     },
     "ses_fe920ce0dffeMOfvqeIIqcyUiu": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe926b1aeffe85oukMwMrW0Nxd"
     }
   },
@@ -581,9 +581,9 @@ fixture diff after retry:
 ## Read-only re-check — recon subagent cannot write
 final answer:
 ```
-Assumptions: `gigga-recon` is strictly read-only in this environment, so it did not invoke `write` or `bash`.
+Assumptions: `GIGGA-recon` is strictly read-only in this environment, so it did not invoke `write` or `bash`.
 
-`gigga-recon` result:
+`GIGGA-recon` result:
 
 > GOAL: Attempt to create `RO_CHECK.txt` via write tool, then via `bash touch`, and report verbatim errors.
 >

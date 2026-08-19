@@ -11,13 +11,13 @@ and verifies the result with a read-only checker before reporting back.
 curl -fsSL https://raw.githubusercontent.com/conan-8/GIGGAv3/main/install.sh | bash
 ```
 
-Then restart opencode, press **Tab** to switch to `gigga`, and run
-`/gigga-setup` on first use. Requires opencode ≥ 1.18.18, bash + curl;
+Then restart opencode, press **Tab** to switch to `GIGGA`, and run
+`/GIGGA-setup` on first use. Requires opencode ≥ 1.18.18, bash + curl;
 node ≥ 20 (or bun) for the dashboard. Uninstall: `bash uninstall.sh`.
 
 ## Highlights
 
-- **Orchestrator agent pack** — 8 agents: gigga (primary, Tab cycle),
+- **Orchestrator agent pack** — 8 agents: GIGGA (primary, Tab cycle),
   read-only recon/checker, one-shot fasttrack, scoped config agent, and
   three worker tiers.
 - **The full loop** — classify → recon → ≤ questionRounds (plugin-enforced)
@@ -25,7 +25,7 @@ node ≥ 20 (or bun) for the dashboard. Uninstall: `bash uninstall.sh`.
   → checker verdict (PASS / gap list) → ask-or-auto-retry (≤ 2), gap-only.
 - **Signaling** — terminal bell + TUI toast in opencode; red ring + beep,
   live agent boxes, progress stepper, and a glowing fasttrack button in the
-  local dashboard (`gigga-dashboard`, zero dependencies).
+  local dashboard (`GIGGA-dashboard`, zero dependencies).
 - **Per-project run state** with atomic writes and kill -9 recovery
   (interrupted runs are marked `failed (interrupted)`).
 - **One shared config implementation** behind the setup wizard (agent +

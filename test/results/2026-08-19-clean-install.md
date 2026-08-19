@@ -1,5 +1,5 @@
 === GIGGA clean-machine install — 2026-08-18T23:59:06Z
-clean HOME: /tmp/gigga-clean.kTSMcZ/home (opencode: MISSING)
+clean HOME: /tmp/GIGGA-clean.kTSMcZ/home (opencode: MISSING)
 
 === 1. the REAL one-liner
 error: opencode not found.
@@ -9,43 +9,43 @@ Then re-run the GIGGA installer.
 one-liner rc=1
 INSTALL FAILED — aborting
 === GIGGA clean-machine install — 2026-08-19T00:01:22Z
-clean HOME: /tmp/gigga-clean.oHGyNx/home (opencode: /home/conan/.local/bin/opencode)
+clean HOME: /tmp/GIGGA-clean.oHGyNx/home (opencode: /home/conan/.local/bin/opencode)
 
 === 1. the REAL one-liner
 Downloading GIGGAv3 (main) from conan-8...
       export PATH="$HOME/.local/bin:$PATH"
-Created default /tmp/gigga-clean.oHGyNx/home/.config/opencode/gigga/gigga.config.json
-Set subagent_depth=2 in /tmp/gigga-clean.oHGyNx/home/.config/opencode/opencode.json (backup kept).
+Created default /tmp/GIGGA-clean.oHGyNx/home/.config/opencode/GIGGA/GIGGA.config.json
+Set subagent_depth=2 in /tmp/GIGGA-clean.oHGyNx/home/.config/opencode/opencode.json (backup kept).
 
-GIGGA installed into /tmp/gigga-clean.oHGyNx/home/.config/opencode:
-  agents/    (8 agents)   commands/ (3 commands)   plugins/gigga.ts
-  gigga/gigga.config.json
+GIGGA installed into /tmp/GIGGA-clean.oHGyNx/home/.config/opencode:
+  agents/    (8 agents)   commands/ (3 commands)   plugins/GIGGA.ts
+  GIGGA/GIGGA.config.json
 
 Next steps:
   1. Restart opencode.
-  2. Press Tab to switch to the gigga agent.
-  3. Run /gigga-setup to map your model tiers.
+  2. Press Tab to switch to the GIGGA agent.
+  3. Run /GIGGA-setup to map your model tiers.
 
 Uninstall anytime: bash uninstall.sh (or re-download it from the repo).
 one-liner rc=0
 
 === 2. landed files
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-checker.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-config.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-fasttrack.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-recon.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-worker-high.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-worker-low.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/agents/gigga-worker-medium.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/commands/gigga-fasttrack.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/commands/gigga-retry.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/commands/gigga-setup.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/commands/gigga-status.md
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/gigga/gigga.config.default.json
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/gigga/gigga.config.json
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/opencode.json
-/tmp/gigga-clean.oHGyNx/home/.config/opencode/plugins/gigga.ts
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-checker.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-config.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-fasttrack.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-recon.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-worker-high.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-worker-low.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/agents/GIGGA-worker-medium.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/commands/GIGGA-fasttrack.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/commands/GIGGA-retry.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/commands/GIGGA-setup.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/commands/GIGGA-status.md
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/GIGGA/GIGGA.config.default.json
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/GIGGA/GIGGA.config.json
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/opencode.json
+/tmp/GIGGA-clean.oHGyNx/home/.config/opencode/plugins/GIGGA.ts
 opencode.json:
 {
   "subagent_depth": 2
@@ -54,8 +54,8 @@ opencode.json:
 === 3. idempotency (second run)
 Next steps:
   1. Restart opencode.
-  2. Press Tab to switch to the gigga agent.
-  3. Run /gigga-setup to map your model tiers.
+  2. Press Tab to switch to the GIGGA agent.
+  3. Run /GIGGA-setup to map your model tiers.
 
 Uninstall anytime: bash uninstall.sh (or re-download it from the repo).
 
@@ -69,7 +69,7 @@ rc=1 (expect 1)
 === 5. A–F scenario suite (from the GitHub clone)
 WARN: no opencode auth to copy — provider calls will fail
 # GIGGA E2E results — 2026-08-19T00:01:23Z
-opencode 1.18.18 | sandbox: /tmp/gigga-e2e.L2laME (kept only with GIGGA_E2E_KEEP=1)
+opencode 1.18.18 | sandbox: /tmp/GIGGA-e2e.L2laME (kept only with GIGGA_E2E_KEEP=1)
 WARN: no auth.json found
 Sandbox model override: opencode/big-pickle
 
@@ -106,11 +106,11 @@ answered question [que_017549476001iMbAcqAOmxnOcy] with: Both functions
 question interaction rounds: 4 (expect ≤2); raw question.asked events: 1
 tasks spawned:
 ```
-gigga-recon completed
-gigga-recon completed
-gigga-worker-medium completed
-gigga-worker-medium completed
-gigga-checker completed
+GIGGA-recon completed
+GIGGA-recon completed
+GIGGA-worker-medium completed
+GIGGA-worker-medium completed
+GIGGA-checker completed
 ```
 checker verdicts: PASS 
 state snapshot DURING execution:
@@ -176,17 +176,17 @@ state snapshot DURING execution:
   },
   "sessions": {
     "ses_fe8ac9cb1ffewrQ2pxkOiyFyQA": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe8acede9ffe7VhQQiKvj7RXQR": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe8ab2df6ffeCsppBpEmuf5nEv": {
-      "agent": "gigga-recon",
+      "agent": "GIGGA-recon",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     },
     "ses_fe8aa16c8ffeX59g7jhn59tG61": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     }
   },
@@ -289,25 +289,25 @@ state snapshot near END:
   },
   "sessions": {
     "ses_fe8ac9cb1ffewrQ2pxkOiyFyQA": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe8acede9ffe7VhQQiKvj7RXQR": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe8ab2df6ffeCsppBpEmuf5nEv": {
-      "agent": "gigga-recon",
+      "agent": "GIGGA-recon",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     },
     "ses_fe8aa16c8ffeX59g7jhn59tG61": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     },
     "ses_fe8a9e3cdffeFL77mJR2IHCOjE": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     },
     "ses_fe8a87dc3ffefSNAaov1mEnVqq": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe8acede9ffe7VhQQiKvj7RXQR"
     }
   },
@@ -345,8 +345,8 @@ All done. Here's the summary:
 - **`--key` at end of array** → defaults to `"true"` (standard boolean flag, unchanged)
 
 **Files changed:**
-- `/tmp/gigga-e2e.L2laME/fixture/lib/parser.js`
-- `/tmp/gigga-e2e.L2laME/fixture/src/argv-parser.ts`
+- `/tmp/GIGGA-e2e.L2laME/fixture/lib/parser.js`
+- `/tmp/GIGGA-e2e.L2laME/fixture/src/argv-parser.ts`
 
 **Assumptions used:** Standard `Error` objects; blank lines in config still skipped; `--key` without value defaults to `"true"`.
 
@@ -388,10 +388,10 @@ max concurrent working workers sampled in state.json: 0
 worker interval overlaps from event stream: 0 (must be 0; workers seen: 2)
 tasks spawned (order matters):
 ```
-gigga-recon completed
-gigga-worker-medium completed
-gigga-worker-medium completed
-gigga-checker completed
+GIGGA-recon completed
+GIGGA-worker-medium completed
+GIGGA-worker-medium completed
+GIGGA-checker completed
 ```
 final answer:
 ```
@@ -571,25 +571,25 @@ fixture diff after retry:
   },
   "sessions": {
     "ses_fe89741c1ffe7SH3eOfQB4vT10": {
-      "agent": "gigga-recon"
+      "agent": "GIGGA-recon"
     },
     "ses_fe8977bc8ffe9ihfuwHDfhZr7Z": {
-      "agent": "gigga"
+      "agent": "GIGGA"
     },
     "ses_fe8965ea6ffeyK2RPjm30Fc9tk": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe8977bc8ffe9ihfuwHDfhZr7Z"
     },
     "ses_fe8964f76ffeLAu523MjkYnR8j": {
-      "agent": "gigga-worker-medium",
+      "agent": "GIGGA-worker-medium",
       "parent": "ses_fe8977bc8ffe9ihfuwHDfhZr7Z"
     },
     "ses_fe895d73affeSN7o58Tzh2KyF1": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe8977bc8ffe9ihfuwHDfhZr7Z"
     },
     "ses_fe894f162ffeXCFKzXTJoT5sGH": {
-      "agent": "gigga-checker",
+      "agent": "GIGGA-checker",
       "parent": "ses_fe8977bc8ffe9ihfuwHDfhZr7Z"
     }
   },
@@ -606,7 +606,7 @@ fixture diff after retry:
 ## Read-only re-check — recon subagent cannot write
 final answer:
 ```
-**gigga-recon response (verbatim):**
+**GIGGA-recon response (verbatim):**
 
 > ## Requirements brief
 > GOAL: Attempt to create a file named RO_CHECK.txt using the write tool, and if that fails, try the shell command `touch RO_CHECK.txt`, reporting any verbatim errors encountered.
@@ -617,7 +617,7 @@ final answer:
 > 
 > PROPOSED QUESTIONS: None (the request cannot be fulfilled under my read‑only constraints).
 
-**Summary:** gigga-recon correctly enforced its read-only guard. It reported that it lacks both the `write` tool and the `bash` tool in its toolset, so it cannot create or touch any files. No errors were thrown because the tools simply aren't available to it — recon gracefully declined with an explanation. No file `RO_CHECK.txt` was created.
+**Summary:** GIGGA-recon correctly enforced its read-only guard. It reported that it lacks both the `write` tool and the `bash` tool in its toolset, so it cannot create or touch any files. No errors were thrown because the tools simply aren't available to it — recon gracefully declined with an explanation. No file `RO_CHECK.txt` was created.
 ```
 **read-only: PASS** — file was not created
 
@@ -625,8 +625,8 @@ final answer:
 Terminated                 HOME="$H" setsid nohup opencode serve --port "$PORT" > "$SB/serve.log" 2>&1 < /dev/null
 === suite rc=0
 
-=== 6. gigga-dashboard smoke
+=== 6. GIGGA-dashboard smoke
 GIGGA dashboard listening on http://127.0.0.1:4498
-  config dir: /tmp/gigga-clean.oHGyNx/home/.config/opencode/gigga
+  config dir: /tmp/GIGGA-clean.oHGyNx/home/.config/opencode/GIGGA
   project:    /home/conan/Documents/GitHub/GIGGAv3
 === clean-machine run complete

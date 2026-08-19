@@ -5,8 +5,8 @@ Evidence files: `2026-08-18-wizard.md` (gate 1), `2026-08-18-session4.md`
 (A–F on final code), `2026-08-18-final2.md` (micro-verifications).
 
 ## Gate 1 — first-run guided setup: **PASS**
-Real conversational wizard (API-driven TUI-equivalent session, gigga →
-gigga-config subagent): 6+ question rounds (per-tier models, default tier,
+Real conversational wizard (API-driven TUI-equivalent session, GIGGA →
+GIGGA-config subagent): 6+ question rounds (per-tier models, default tier,
 maxParallel, autoRetry, questionRounds, sound) → config written with
 `configured: true` and real provider models, worker `model:` marker lines +
 orchestrator default rewritten. Full transcript + diffs in the wizard file.
@@ -33,10 +33,10 @@ the FAIL→retry loop itself is proven by E3 above. Driver flakiness notes:
 state sampling still misses short worker windows (SSE-overlap metric is the
 reliable one).
 
-## /gigga-status
+## /GIGGA-status
 CLI: `node …/shared.mjs status <projectDir>` → live per-project state JSON
 (orchestrator + numbered agents, phase, pendingQuestion — pasted in focus +
-final2 files). Agent-formatted output from a live gigga-fasttrack session is
+final2 files). Agent-formatted output from a live GIGGA-fasttrack session is
 in `2026-08-18-session4.md` ("phase: idle, no pending question … no run
 yet" — rendered from a fresh project; the richer state table renders
 identically via the same prompt).

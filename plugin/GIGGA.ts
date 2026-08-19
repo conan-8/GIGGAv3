@@ -8,7 +8,7 @@ import { createHash } from "node:crypto"
  * GIGGA plugin — orchestration state tracker (session 4).
  *
  * Maintains PER-PROJECT state under
- *   <cfgRoot>/gigga/projects/<slug>-<hash10>/state.json
+ *   <cfgRoot>/GIGGA/projects/<slug>-<hash10>/state.json
  * (cfgRoot = GIGGA_HOME or ~/.config/opencode; slug+hash derive from the
  * project/worktree dir — see projectStatePath, mirrored in
  * dashboard/lib/shared.mjs with a conformance test).
@@ -29,12 +29,13 @@ import { createHash } from "node:crypto"
 export function projectStatePath(projectDir: string, cfgRoot: string): string {
   const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
   const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
-  return join(cfgRoot, "gigga", "projects", `${slug}-${hash}`, "state.json")
+  return join(cfgRoot, "GIGGA", "projects", `${slug}-${hash}`, "state.json")
 }
 
 const CFG_ROOT = process.env.GIGGA_HOME ?? join(process.env.HOME ?? "~", ".config", "opencode")
-const GIGGA_DIR = join(CFG_ROOT, "gigga")
-const CONFIG_FILE = join(GIGGA_DIR, "gigga.config.json")
+const GIGGA_DIR = join(CFG_ROOT, "GIGGA")
+const CONFIG_FILE = join(GIGGA_DIR, "GIGGA.config.json")
+const LEGACY_CONFIG_FILE = join(CFG_ROOT, "gigga", "gigga.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
 const STALE_AFTER_MS = 120_000
 
@@ -110,7 +111,11 @@ function readConfig(): any {
   try {
     return JSON.parse(readFileSync(CONFIG_FILE, "utf8"))
   } catch {
-    return {}
+    try {
+      return JSON.parse(readFileSync(LEGACY_CONFIG_FILE, "utf8")) // pre-v0.1.0 layout
+    } catch {
+      return {}
+    }
   }
 }
 
@@ -252,10 +257,10 @@ function sidebarTitle(entry: { kind: string; id: number; tier: Tier; task: strin
 }
 
 function classify(subagentType: string): { kind: Kind; tier: Tier } | null {
-  if (subagentType === "gigga-recon") return { kind: "recon", tier: null }
-  if (subagentType === "gigga-checker") return { kind: "checker", tier: null }
-  if (subagentType === "gigga-fasttrack") return { kind: "fasttrack", tier: null }
-  const m = /^gigga-worker-(low|medium|high)$/.exec(subagentType)
+  if (subagentType === "GIGGA-recon") return { kind: "recon", tier: null }
+  if (subagentType === "GIGGA-checker") return { kind: "checker", tier: null }
+  if (subagentType === "GIGGA-fasttrack") return { kind: "fasttrack", tier: null }
+  const m = /^GIGGA-worker-(low|medium|high)$/.exec(subagentType)
   if (m) return { kind: "worker", tier: m[1] as Tier }
   return null
 }
@@ -264,7 +269,7 @@ function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
   if (!sessionID) return false
   if (sessionID === s.orchestrator) return true
   const info = s.sessions[sessionID]
-  if (info?.agent?.toLowerCase().startsWith("gigga")) return true
+  if (info?.agent?.toLowerCase().startsWith("GIGGA")) return true
   if (info?.parent && info.parent === s.orchestrator) return true
   return false
 }
@@ -402,7 +407,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         if (info.parentID) next.parent = info.parentID
         if (JSON.stringify(cur) === JSON.stringify(next)) return false
         s.sessions[info.id] = next
-        if (next.agent?.toLowerCase().startsWith("gigga") && next.parent) {
+        if (next.agent?.toLowerCase().startsWith("GIGGA") && next.parent) {
           const entry = s.agents.find(
             (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
           )

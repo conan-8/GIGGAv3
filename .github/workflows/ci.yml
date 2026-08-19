@@ -8,7 +8,7 @@ jobs:
       - name: shellcheck installers and test scripts
         run: |
           # syntax-check everything, shellcheck what exists
-          for f in install.sh uninstall.sh test/*.sh dashboard/bin/gigga-dashboard; do
+          for f in install.sh uninstall.sh test/*.sh dashboard/bin/GIGGA-dashboard; do
             bash -n "$f"
          
           if command -v shellcheck >/dev/null 2>&1; then

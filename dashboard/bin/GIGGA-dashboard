@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # GIGGA dashboard launcher — starts the local web app and opens the browser.
-# Installed to ~/.local/bin/gigga-dashboard by install.sh. Options are passed
+# Installed to ~/.local/bin/GIGGA-dashboard by install.sh. Options are passed
 # through to the server: --port N, --no-open.
 set -eu
-DIR="${GIGGA_DASHBOARD_DIR:-$HOME/.config/opencode/gigga/dashboard}"
+DIR="${GIGGA_DASHBOARD_DIR:-$HOME/.config/opencode/GIGGA/dashboard}"
 if [ ! -f "$DIR/server.mjs" ]; then
-  echo "gigga-dashboard: $DIR/server.mjs not found — reinstall GIGGA (install.sh)" >&2
+  echo "GIGGA-dashboard: $DIR/server.mjs not found — reinstall GIGGA (install.sh)" >&2
   exit 1
 fi
 NODE_BIN="$(command -v node || command -v bun || true)"
 if [ -z "$NODE_BIN" ]; then
-  echo "gigga-dashboard: need node or bun on PATH" >&2
+  echo "GIGGA-dashboard: need node or bun on PATH" >&2
   exit 1
 fi
 exec "$NODE_BIN" "$DIR/server.mjs" "$@"

@@ -14,17 +14,17 @@ Two ways to run:
 
 ## Preconditions
 
-- GIGGA installed (`install.sh`), `/gigga-setup` run (tiers mapped).
+- GIGGA installed (`install.sh`), `/GIGGA-setup` run (tiers mapped).
 - Working directory: a standalone git checkout of `test/fixtures/`
   (opencode resolves cwd to the git root — a nested dir would change scope).
-- For D: `maxParallel: 1` in `~/.config/opencode/gigga/gigga.config.json`.
+- For D: `maxParallel: 1` in `~/.config/opencode/GIGGA/GIGGA.config.json`.
 
 ## Scenarios
 
 ### A. Simple question → fasttrack
-Send to gigga: `What does parseConfig in lib/parser.js do?`
-Expect: straight answer; a `gigga-fasttrack` task (visible in
-`~/.config/opencode/gigga/events.log`); NO `gigga-recon` task, no todo list,
+Send to GIGGA: `What does parseConfig in lib/parser.js do?`
+Expect: straight answer; a `GIGGA-fasttrack` task (visible in
+`~/.config/opencode/GIGGA/events.log`); NO `GIGGA-recon` task, no todo list,
 no questions.
 
 ### B. Multi-step task → full pipeline
@@ -32,15 +32,15 @@ Send: `Add input validation to both parsers: parseConfig in lib/parser.js and
 parseArgs in src/argv-parser.ts. Reject empty or malformed input with clear
 error messages, for every entry point.`
 Expect: ≤2 question rounds (bell + toast when a question is pending);
-a todo plan; ≥1 numbered `gigga-worker-*` tasks; `state.json` shows
+a todo plan; ≥1 numbered `GIGGA-worker-*` tasks; `state.json` shows
 `phase: "executing"` with numbered worker entries going working→done;
-`gigga-checker` task returns `VERDICT: PASS`; fixture files actually changed.
+`GIGGA-checker` task returns `VERDICT: PASS`; fixture files actually changed.
 
 ### C. Sabotage → FAIL → retry fixes
 Workers are made to skip the last item of their brief (the automated driver
 injects a SABOTAGE line into the worker agent files). Request asks for two
 things (validation + JSDoc docs). Expect: checker `VERDICT: FAIL` with a gap
-list naming the missing piece; after `/gigga-retry` (or answering the retry
+list naming the missing piece; after `/GIGGA-retry` (or answering the retry
 question with yes) with workers restored, only the gap is fixed and the
 re-check PASSES.
 

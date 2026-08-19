@@ -5,14 +5,14 @@
 ```
 user ── opencode (TUI or `opencode serve`)
         └─ GIGGA (primary agent, agents/GIGGA.md — all-caps, red)      ← state machine, never codes
-           ├─ gigga-recon      read-only briefs + ≤N question rounds
-           ├─ gigga-worker-low/medium/high              numbered executors
+           ├─ GIGGA-recon      read-only briefs + ≤N question rounds
+           ├─ GIGGA-worker-low/medium/high              numbered executors
            │    └─ (optional sub-subagents, needs permission.task: allow)
-           ├─ gigga-checker    read-only VERDICT/GAPS vs original request
-           ├─ gigga-fasttrack  one-shot path for simple requests
-           └─ gigga-config     scoped setup agent (drives the shared CLI)
+           ├─ GIGGA-checker    read-only VERDICT/GAPS vs original request
+           ├─ GIGGA-fasttrack  one-shot path for simple requests
+           └─ GIGGA-config     scoped setup agent (drives the shared CLI)
 
-plugin/gigga.ts  ← event bus → per-project state.json (atomic, locked),
+plugin/GIGGA.ts  ← event bus → per-project state.json (atomic, locked),
                    bell/toast signals, phase toasts, question cap,
                    stale-run recovery, server.json discovery
 dashboard/       ← zero-dep node server + vanilla UI; reads state.json,
@@ -21,26 +21,26 @@ lib/shared.mjs   ← THE config implementation (validate/apply/models/status/
                    wizard CLI) used by dashboard, config agent, tests
 ```
 
-Run state: `~/.config/opencode/gigga/projects/<slug>-<hash10>/state.json`
+Run state: `~/.config/opencode/GIGGA/projects/<slug>-<hash10>/state.json`
 (project dir keyed; plugin and dashboard compute the path identically —
 parity unit test enforces it). Config:
-`~/.config/opencode/gigga/gigga.config.json` (+ `configured` first-run gate,
+`~/.config/opencode/GIGGA/GIGGA.config.json` (+ `configured` first-run gate,
 `fasttrack.flag` escape hatch, `server.json` discovery).
 
 ## Where spec requirements live
 
 | requirement | code |
 |---|---|
-| orchestration flow, phase discipline | `agents/gigga.md` (prompt state machine) |
+| orchestration flow, phase discipline | `agents/GIGGA.md` (prompt state machine) |
 | read-only enforcement | `permission: {edit: deny, bash: deny}` in recon/checker frontmatter |
-| question cap | `plugin/gigga.ts` `tool.execute.before` (empties args at cap+1) |
+| question cap | `plugin/GIGGA.ts` `tool.execute.before` (empties args at cap+1) |
 | numbered workers, tiers, maxParallel | orchestrator prompt + plugin `task` event tracking |
-| state machine + signaling | `plugin/gigga.ts` (`handleEvent`, `announcePhase`, `bell`, `toast`) |
+| state machine + signaling | `plugin/GIGGA.ts` (`handleEvent`, `announcePhase`, `bell`, `toast`) |
 | per-project state, recovery | `projectStatePath` (plugin + `lib/shared.mjs`), `recoverStaleState` |
 | dashboard UI | `dashboard/public/*` (stepper, boxes, ring, fasttrack, config) |
-| config wizard/validation | `dashboard/lib/shared.mjs` CLI + `agents/gigga-config.md` + dashboard screen |
+| config wizard/validation | `dashboard/lib/shared.mjs` CLI + `agents/GIGGA-config.md` + dashboard screen |
 | installer/uninstaller | `install.sh`, `uninstall.sh` (OWNER constant!) |
-| status command | `commands/gigga-status.md` + `shared.mjs status` |
+| status command | `commands/GIGGA-status.md` + `shared.mjs status` |
 
 Known-limitation ledger: `DEVIATIONS.md` (25 verified opencode behaviors),
 `test/COMPLIANCE.md` (requirement → evidence), `CHANGELOG.md`.
@@ -51,7 +51,7 @@ Known-limitation ledger: `DEVIATIONS.md` (25 verified opencode behaviors),
   red ring lives in the dashboard. Workaround: dashboard or README-documented
   terminal bell settings.
 - **Question tool from subagents is answerable but quirky headless**; the
-  wizard's questions come from the gigga-config subagent session (TUI renders
+  wizard's questions come from the GIGGA-config subagent session (TUI renders
   them fine; API drivers must answer via the global question endpoint).
 - **Cap counts calls, not rounds** — under-asking possible, over-asking not.
 - **Sub-subagents** require `permission: {task: allow}` on worker agents

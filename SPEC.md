@@ -13,34 +13,34 @@ agent pack via a one-line curl installer.
 - A worker with a hard task may spawn sub-subagents (subagent_depth 2).
 - Model tiers: low / medium / high, mapped to models from the user's already-configured opencode providers during first-run setup (config agent or setup UI). The user picks the default tier; the orchestrator may escalate per-task difficulty.
 - After all workers finish: checker agent (read-only) does a sanity check — is the user's original request sufficiently fulfilled? On failure: ask the user whether to retry, OR auto-retry if `autoRetry` was enabled during setup. Retry = orchestrator fixes only the gaps the checker found.
-- Manual fasttrack: user can force fasttrack during question answering and via a glowing sidebar button in the dashboard and via /gigga-fasttrack.
+- Manual fasttrack: user can force fasttrack during question answering and via a glowing sidebar button in the dashboard and via /GIGGA-fasttrack.
 - Sidebar UI (dashboard): orchestrator tab + one mini-box per numbered subagent; clicking a box shows that agent's thinking/progress in the main window like a tab; each box shows working (red/spinning border; plain color indicator acceptable) or done. Overall progress bar above the boxes: read repo → questions → plan → execute → check → done.
 
 ## Session-4 refinements (as built)
 
 - **Per-project state** (design correction): run state lives at
-  `<cfgRoot>/gigga/projects/<slug>-<hash10>/state.json`, keyed by the
+  `<cfgRoot>/GIGGA/projects/<slug>-<hash10>/state.json`, keyed by the
   project/worktree dir — never in the global dir. The dashboard serves the
   project of its CWD (`GIGGA_PROJECT_DIR` override) and shows it in the
   footer. Legacy global state.json is renamed aside on plugin load.
 - **Interrupted runs**: working agents with no state update for 120 s are
   marked `failed (interrupted)` (plugin on load, dashboard on read).
 - **questionRounds enforcement**: at the (cap+1)-th question tool call in a
-  gigga session the plugin empties the question args; the orchestrator then
+  GIGGA session the plugin empties the question args; the orchestrator then
   proceeds with stated assumptions (prompt-instructed). Batching caveat: a
   model issuing many single-question calls in one round can hit the cap
   early (under-asking, never over-asking).
 - **Phase toasts**: planning / N workers running (M slots free) / checking /
   done / failed-needs-retry.
 - **Setup**: first run detected via missing config or missing
-  `"configured": true`; `/gigga-setup` (gigga-config agent) and the
+  `"configured": true`; `/GIGGA-setup` (GIGGA-config agent) and the
   dashboard config screen share one implementation
   (`dashboard/lib/shared.mjs`, also a CLI: validate/apply/models/status/
   wizard). The wizard marks `configured: true`, rewrites agent model lines,
   and shows a 5-line cheat sheet.
-- **gigga-config is scope-limited**: bash allows only the shared CLI and
+- **GIGGA-config is scope-limited**: bash allows only the shared CLI and
   `opencode models` (wildcard deny first — opencode uses last-match-wins).
-- **/gigga-status** command prints phase, agent table, pending-question
+- **/GIGGA-status** command prints phase, agent table, pending-question
   state for the current project.
 - Terminal worker navigation is native (`session_child_cycle` etc.);
   documented in README, nothing auto-applied to tui.json.
@@ -56,10 +56,10 @@ agent pack via a one-line curl installer.
   the plugin (gated on config `sound`); toast = `POST /tui/show-toast` on
   the opencode server (plugin uses its `serverUrl`).
 - Worker lifecycle: tracked from `message.part.updated` tool parts where
-  `tool === "task"` — `state.input.subagent_type` identifies the gigga agent
+  `tool === "task"` — `state.input.subagent_type` identifies the GIGGA agent
   and tier, the completed `state.output` embeds the subagent session id.
-- Fasttrack forcing: `/gigga-fasttrack` writes
-  `~/.config/opencode/gigga/fasttrack.flag`; the orchestrator consumes and
+- Fasttrack forcing: `/GIGGA-fasttrack` writes
+  `~/.config/opencode/GIGGA/fasttrack.flag`; the orchestrator consumes and
   deletes it at PHASE 1.
 - `state.json` (written atomically by the plugin, tmp+rename):
   `{ phase: idle|recon|questions|plan|executing|checking|done|failed,
@@ -68,11 +68,11 @@ agent pack via a one-line curl installer.
 
 ## Session-3 refinements (dashboard)
 
-- `gigga-dashboard` launcher (`~/.local/bin`, default port 4399, free-port
+- `GIGGA-dashboard` launcher (`~/.local/bin`, default port 4399, free-port
   fallback) starts a zero-dependency node server (`dashboard/server.mjs`)
   serving the UI plus `/api/state`, `/api/session/:id/messages`,
   `/api/events` (SSE), `/api/fasttrack`, `/api/config`.
-- Server discovery: the plugin writes `gigga/server.json` from its
+- Server discovery: the plugin writes `GIGGA/server.json` from its
   `serverUrl`; the dashboard health-checks it and degrades to status-only
   mode (state file + SQLite session storage) when unreachable.
 - UI: progress stepper (READ REPO→…→DONE), orchestrator + numbered worker

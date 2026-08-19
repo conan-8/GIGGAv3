@@ -36,8 +36,8 @@ ports). Kill strays with `bash test/stop_servers.sh <port>`.
 
 - `agents/` — the 8 opencode agent definitions (orchestrator, recon,
   checker, fasttrack, config, 3 worker tiers)
-- `commands/` — /gigga-setup, /gigga-fasttrack, /gigga-retry, /gigga-status
-- `plugin/gigga.ts` — state machine, signaling, enforcement
+- `commands/` — /GIGGA-setup, /GIGGA-fasttrack, /GIGGA-retry, /GIGGA-status
+- `plugin/GIGGA.ts` — state machine, signaling, enforcement
 - `dashboard/` — zero-dep node server + vanilla UI (+ `lib/shared.mjs`,
   the one true config implementation)
 - `test/` — e2e drivers, fixtures, COMPLIANCE.md, results
