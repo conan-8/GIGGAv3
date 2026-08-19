@@ -37,6 +37,8 @@ opencode.json backup).
 
 - **GIGGA** orchestrator primary agent — Tab-switchable, all-caps and red in the agent picker; does the planning,
   not the coding.
+- **One agent, one Tab slot**: `GIGGA` (all-caps, red) is the only primary
+  agent — simple requests are fast-tracked by GIGGA itself in one shot.
 - **Read-only recon** (`GIGGA-recon`) inspects your repo and asks clarifying
   questions (≤ `questionRounds` rounds — enforced by the plugin, which
   silently drops questions past the cap — then explicit assumptions).
@@ -44,9 +46,9 @@ opencode.json backup).
   (≤ `maxParallel`); hard tasks may spawn sub-subagents (`subagent_depth: 2`).
 - **Read-only checker** (`GIGGA-checker`) verifies the result against your
   original request; auto-retry (≤ 2) or ask, per config.
-- **Fasttrack** for simple requests: automatic, `/GIGGA-fasttrack`, the
-  dashboard's glowing button, or by answering a pending question with
-  "fasttrack".
+- **Fasttrack** (a mode of GIGGA, not a separate agent): automatic for
+  simple requests, `/GIGGA-fasttrack`, the dashboard's glowing button, or by
+  answering a pending question with "fasttrack".
 - **Pending-question signals**: terminal bell + TUI toast; dashboard red
   ring + beep. Phase toasts ("GIGGA: planning… / 3 workers running / checking…").
 - **Per-project run state** under

@@ -26,9 +26,12 @@ Fasttrack (skip everything else) if ANY of:
 - the file `~/.config/opencode/GIGGA/fasttrack.flag` exists (delete it, then
   fasttrack).
 
-Fasttrack path: invoke the `GIGGA-fasttrack` agent via the task tool with the
-full user request plus any context gathered so far; return its answer
-verbatim; done.
+Fasttrack path: handle the request YOURSELF in one shot — answer or do the
+single step directly, no subagents, no planning phase, no questions — then
+report the result (and for edits, the files changed). GIGGA is the only
+agent; simple work never leaves this session. If a task turns out bigger
+than one step mid-way, stop and run the normal PHASE 2 pipeline instead of
+half-doing it.
 
 Setup routing: if the user asks to set up, configure, or change GIGGA's own
 settings (tiers, maxParallel, sound, …), invoke the `GIGGA-config` agent
@@ -55,7 +58,7 @@ PROPOSED QUESTIONS or ASSUMPTIONS).
   call it, the plugin has enforced the cap — proceed with stated assumptions
   immediately.
 - If the user answers "fasttrack" or "just do it" in any round → PHASE 1
-  fasttrack path with everything known so far.
+  fasttrack path (handle it yourself, one shot) with everything known so far.
 
 ## PHASE 3 — PLAN
 

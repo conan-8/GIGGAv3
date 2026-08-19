@@ -5,7 +5,7 @@ agent pack via a one-line curl installer.
 
 - Primary agent `GIGGA` (orchestrator; file agents/GIGGA.md, shown all-caps/red), Tab-switchable like opencode's Plan/Build agents.
 - Flow: user prompt → orchestrator classifies:
-  - Simple recon question or one-step task → route directly to fasttrack agent, answer, done.
+  - Simple recon question or one-step task → GIGGA handles it itself in one shot (no subagents).
   - Everything else → call recon agent (read-only): inspect repo + user request, then ask the user clarifying questions, MAX 2 ROUNDS of questions. If still ambiguous after 2 rounds, proceed with explicitly stated assumptions.
 - While any question is pending to the user: signal it (terminal: bell character + toast; dashboard: red ring around the whole UI + beep sound). Cleared when the user answers.
 - After answers: orchestrator writes a todolist/plan (use opencode's todo mechanism if present), decides subagents (minimum 1), parallel or sequential at orchestrator's discretion. Orchestrator itself does almost no implementation work.
@@ -13,7 +13,7 @@ agent pack via a one-line curl installer.
 - A worker with a hard task may spawn sub-subagents (subagent_depth 2).
 - Model tiers: low / medium / high, mapped to models from the user's already-configured opencode providers during first-run setup (config agent or setup UI). The user picks the default tier; the orchestrator may escalate per-task difficulty.
 - After all workers finish: checker agent (read-only) does a sanity check — is the user's original request sufficiently fulfilled? On failure: ask the user whether to retry, OR auto-retry if `autoRetry` was enabled during setup. Retry = orchestrator fixes only the gaps the checker found.
-- Manual fasttrack: user can force fasttrack during question answering and via a glowing sidebar button in the dashboard and via /GIGGA-fasttrack.
+- Manual fasttrack: user can force fasttrack during question answering and via a glowing sidebar button in the dashboard and via /GIGGA-fasttrack (one GIGGA agent only — fasttrack is a mode of GIGGA, not a separate agent).
 - Sidebar UI (dashboard): orchestrator tab + one mini-box per numbered subagent; clicking a box shows that agent's thinking/progress in the main window like a tab; each box shows working (red/spinning border; plain color indicator acceptable) or done. Overall progress bar above the boxes: read repo → questions → plan → execute → check → done.
 
 ## Session-4 refinements (as built)

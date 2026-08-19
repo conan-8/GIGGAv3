@@ -1,6 +1,6 @@
 ---
 description: GIGGA status — current phase, agent table, pending-question state for this project
-agent: GIGGA-fasttrack
+agent: GIGGA
 ---
 
 Print GIGGA's live status for THIS project (this exact prompt already

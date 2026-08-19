@@ -304,7 +304,7 @@ bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
 start_server
 PROBE=$(sess_new "$FX" GIGGA-fasttrack)   # session creation loads the plugin
 curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' \
-  -d '{"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Reply with just: ok"}]}' -o /dev/null
+  -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Reply with just: ok"}]}' -o /dev/null
 sleep 15
 md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"],a["status"],a["task"][-30:]) for a in d["agents"]])' "$E2STATE")"
 if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2STATE"; then
@@ -450,7 +450,7 @@ md "## /GIGGA-status (live project state, agent-formatted)"
 ST_JSON=$(cd "$FX" && GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
 ST_SID=$(sess_new "$FX" GIGGA-fasttrack)
 curl -s -X POST "$BASE/session/$ST_SID/prompt_async" -H 'content-type: application/json' \
-  -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$ST_JSON")" -o /dev/null
+  -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$ST_JSON")" -o /dev/null
 watch "$ST_SID" 180 none >/dev/null
 code "$(final_text "$ST_SID")"
 

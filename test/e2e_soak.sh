@@ -145,8 +145,8 @@ d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).is
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start
-PROBE=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Reply: ok"}]}' -o /dev/null
+PROBE=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Reply: ok"}]}' -o /dev/null
 sleep 20
 GIGGA_HOME="$H/.config/opencode" GIGGA_DATA_DIR="$H/.local/share/opencode" GIGGA_PROJECT_DIR="$FX" \
   node "$REPO/dashboard/server.mjs" --port "$DP" --no-open >/dev/null 2>&1 &

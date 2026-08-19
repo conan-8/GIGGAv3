@@ -99,8 +99,8 @@ for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do sed -i '/^TEST MODE:
 
 md "## /GIGGA-status — live project state (CLI + agent-formatted)"
 STJ=$(GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
-S2=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA-fasttrack\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-curl -s -X POST "$BASE/session/$S2/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA-fasttrack","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$STJ")" -o /dev/null
+S2=$(curl -s -X POST "$BASE/session" -H 'content-type: application/json' -d "{\"directory\":\"$FX\",\"agent\":\"GIGGA\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -s -X POST "$BASE/session/$S2/prompt_async" -H 'content-type: application/json' -d "$(python3 -c 'import json,sys; print(json.dumps({"agent":"GIGGA","parts":[{"type":"text","text":"Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: " + sys.argv[1]}]}))' "$STJ")" -o /dev/null
 W=0
 while [ $W -lt 180 ]; do [ -n "$(idle "$S2" "$SSE")" ] && break; sleep 2; W=$((W+2)); done
 code "$(ft "$S2")"

@@ -159,7 +159,7 @@ md "answer: $R"
 watch "$E1" 300 first >/dev/null
 md "tasks:"; code "$(tasks_for "$E1")"
 md "final:"; code "$(final_text "$E1")"
-if tasks_for "$E1" | grep -q GIGGA-fasttrack; then md "**E1: PASS**"; else md "**E1: CHECK**"; fi
+if tasks_for "$E1" | grep -q GIGGA; then md "**E1: PASS**"; else md "**E1: CHECK**"; fi
 
 # ============================================================ EDGE 2 ======
 md ""
@@ -190,8 +190,8 @@ d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).is
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start_server "$P1" "$FX"
-PROBE=$(sess_new "$FX" GIGGA-fasttrack)
-ask "$PROBE" GIGGA-fasttrack "Reply with just: ok" >/dev/null
+PROBE=$(sess_new "$FX" GIGGA)
+ask "$PROBE" GIGGA "Reply with just: ok" >/dev/null
 sleep 20
 md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"], a["status"], a["task"][-28:]) for a in d["agents"]])' "$E2S")"
 if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2S"; then
@@ -272,8 +272,8 @@ ask "$ST" GIGGA "Add a median(list) function to src/calc.ts." >/dev/null
 watch "$ST" 300 first >/dev/null
 ST_JSON=$(GIGGA_HOME="$H/.config/opencode" node "$REPO/dashboard/lib/shared.mjs" status "$FX" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["state"]))')
 md "state JSON:"; code "$(echo "$ST_JSON" | python3 -m json.tool | head -30)"
-STS=$(sess_new "$FX" GIGGA-fasttrack)
-ask "$STS" GIGGA-fasttrack "Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: $ST_JSON" >/dev/null
+STS=$(sess_new "$FX" GIGGA)
+ask "$STS" GIGGA "Print GIGGA status. Format: line 1 phase + pending question; quote originalRequest (100 chars); table of agents (number/kind, tier, status, task 60 chars, session id); if agents empty say no run yet. State JSON: $ST_JSON" >/dev/null
 watch "$STS" 180 none >/dev/null
 md "agent-formatted /GIGGA-status output:"; code "$(final_text "$STS")"
 
