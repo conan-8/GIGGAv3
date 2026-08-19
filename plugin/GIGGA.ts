@@ -236,17 +236,22 @@ async function toast(message: string, variant: "info" | "warning" | "error" | "s
 
 // TUI sidebar integration (verified opencode 1.18.18, DEVIATIONS #27): the
 // sidebar (ctrl+x b) lists sessions by title, and titles are live-updatable.
-async function setTitle(sessionID: string | null | undefined, title: string) {
-  if (!serverUrl || !sessionID) return
+async function setTitle(sessionID: string | null | undefined, title: string): Promise<boolean> {
+  if (!serverUrl || !sessionID) return false
   try {
     const res = await fetch(new URL(`session/${sessionID}`, serverUrl), {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title: Array.from(title).slice(0, 70).join("") }), // split by code point — never cut an emoji
     })
-    if (!res.ok) await log(`setTitle: HTTP ${res.status}`)
+    if (!res.ok) {
+      await log(`setTitle: HTTP ${res.status}`)
+      return false
+    }
+    return true
   } catch (e) {
     await log(`setTitle failed: ${String(e)}`)
+    return false
   }
 }
 
@@ -324,7 +329,8 @@ function orchestratorTitle(s: RunState, sec: number, flash = false): string {
   if (s.phase === "done") {
     const ws = s.agents.filter((a) => a.kind === "worker")
     const dur = s.runStartedAt && s.doneAt ? ` · ${fmtClock(Date.parse(s.doneAt) - Date.parse(s.runStartedAt))}` : ""
-    return `${flash ? "🎉" : "✓"} GIGGA ▓▓▓▓▓▓ done${dur} · ${ws.length} worker${ws.length === 1 ? "" : "s"}`
+    const wsSuffix = ws.length ? ` · ${ws.length} worker${ws.length === 1 ? "" : "s"}` : ""
+    return `${flash ? "🎉" : "✓"} GIGGA ▓▓▓▓▓▓ done${dur}${wsSuffix}`
   }
   const dots = s.agents
     .filter((a) => a.kind !== "orchestrator")
@@ -332,7 +338,7 @@ function orchestratorTitle(s: RunState, sec: number, flash = false): string {
     .slice(0, 10)
     .map(dotOf)
     .join("")
-  const word = s.phase === "questions" && s.pendingQuestion ? "QUESTIONS — waiting for you" : PHASE_WORD[s.phase] ?? s.phase.toUpperCase()
+  const word = s.phase === "questions" && s.pendingQuestion ? "QUESTIONS — waiting for you" : s.phase === "idle" ? "WORKING" : PHASE_WORD[s.phase] ?? s.phase.toUpperCase()
   return dots ? `⚡ GIGGA ${orchBar(s.phase, sec)} · ${dots} ${word}` : `⚡ GIGGA ${orchBar(s.phase, sec)} ${word}`
 }
 
@@ -369,8 +375,7 @@ const lastTitles = new Map<string, string>()
 
 async function patchTitle(sessionID: string, title: string) {
   if (lastTitles.get(sessionID) === title) return
-  await setTitle(sessionID, title)
-  lastTitles.set(sessionID, title)
+  if (await setTitle(sessionID, title)) lastTitles.set(sessionID, title) // cache only on success — failures retry next tick
 }
 
 function stopSweep() {
@@ -600,6 +605,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         if (typeof text === "string" && text.trim()) firstUserText = text.trim().slice(0, 500)
       }
       let orchTitle: string | null = null
+      let bindOrchestrator = false
       await update((s) => {
         const cur = s.sessions[sid] ?? {}
         const next = { ...cur }
@@ -615,9 +621,34 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           orchTitle = `⚡ GIGGA · ${shortTask(next.firstUserText)}`
           changed = true
         }
+        // Bind a GIGGA primary session as the live run on its first activity,
+        // even if it never spawns subagents (one-shot requests) — otherwise
+        // the sidebar shows nothing at all for the whole run. NOTE: on
+        // 1.18.18 message.updated carries no usable parts/role for extracting
+        // the request text (DEVIATIONS #27), so the trigger is the session's
+        // MAPPED agent (populated by session.created), not the message body.
+        const agent = (next.agent ?? cur.agent ?? "").toLowerCase()
+        if (
+          agent.startsWith("gigga") &&
+          s.orchestrator !== sid &&
+          (!s.orchestrator || s.phase === "done" || s.phase === "failed" || s.phase === "idle")
+        ) {
+          const sessions = s.sessions
+          Object.assign(s, freshState())
+          s.sessions = sessions
+          s.orchestrator = sid
+          s.runStartedAt = new Date().toISOString()
+          if (firstUserText) s.originalRequest = firstUserText
+          bindOrchestrator = true
+          changed = true
+        }
         return changed
       })
       if (orchTitle) await setTitle(sid, orchTitle)
+      if (bindOrchestrator) {
+        await log(`orchestrator bound: ${sid} (agent=${(await readState()).sessions[sid]?.agent ?? "?"})`)
+        await refreshSidebar() // starts the sweep — ⚡ row goes live immediately
+      }
       return
     }
 
