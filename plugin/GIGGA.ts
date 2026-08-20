@@ -303,8 +303,7 @@ const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").
 //   traffic-light dot per subagent (🟢 done · ❌ failed · 🟡 running · 🔴
 //   spawning), re-sorted live;
 // - child rows: `├─`/`└─` connector, status dot, braille spinner while
-//   running, and for workers a time-budget bar (elapsed vs tier budget
-//   H 20m · M 10m · L 5m) with a ticking m:ss clock; frozen as
+//   running, and a ticking m:ss clock; frozen as
 //   `✓ m:ss` / `✗ m:ss` when finished. Dots are emoji so they keep their
 //   native red/yellow/green in the plain-text title.
 // A 1s sweep PATCHes all rows in one pass; spinner phase, step pulse and the
@@ -354,13 +353,6 @@ function orchBar(phase: string, sec: number): string {
   return "▓".repeat(step - 1) + (sec % 2 ? "▒" : "▓") + "░".repeat(6 - step)
 }
 
-function budgetBar(a: { tier: Tier }, ms: number): string {
-  const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
-  if (!budget) return ""
-  const cells = Math.max(1, Math.min(5, Math.ceil((ms / budget) * 5)))
-  return "▓".repeat(cells) + "░".repeat(5 - cells)
-}
-
 function orchestratorTitle(s: RunState, sec: number, flash = false): string {
   if (s.phase === "failed") {
     return s.failReason === "interrupted" ? "✗ GIGGA ▓▓▓▓░░ interrupted" : "✗ GIGGA ▓▓▓▓░░ failed — /GIGGA-retry"
@@ -390,7 +382,6 @@ function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, se
   }
   const spin = SPINNER[(sec + idx) % SPINNER.length]
   const ms = elapsedMs(a)
-  if (a.kind === "worker" && a.tier && ms != null) return `${conn} 🟡 ${name} ${spin} ${budgetBar(a, ms)} ${fmtClock(ms)}`
   return `${conn} 🟡 ${name} ${spin}${ms != null ? ` · ${fmtClock(ms)}` : ""}`
 }
 

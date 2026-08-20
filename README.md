@@ -82,8 +82,7 @@ during fasttrack one-shots, plus a `» FASTTRACK ARMED` line while the
 fasttrack flag is set), one indicator light per subagent (green done ·
 red failed · yellow running · dim spawning), and two rows per subagent —
 the first with its status light, type label (`recon` / `worker #N` /
-`checker`), braille spinner and, for workers, a time-budget bar (elapsed
-vs tier budget, H 20m · M 10m · L 5m) with a ticking per-second clock;
+`checker`), braille spinner and a ticking per-second clock;
 the second with its concise task title — freezing to `✓ m:ss` / `✗ m:ss`
 when it lands. The widget is **session-scoped**: it renders only in the
 tab viewing the GIGGA run's session — other tabs/sessions stay clean, and

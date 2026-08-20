@@ -6,8 +6,8 @@
  * (ctrl+x b): a 6-step phase bar (red while running, green once done) with
  * a flashing current step and a ticking total-run clock to its right, one
  * indicator light per subagent (done / failed / running / spawning), and a
- * tree row per subagent with a braille spinner, time-budget bar and ticking
- * clock for workers, freezing to ✓/✗ m:ss on completion. Also raises an
+ * tree row per subagent with a braille spinner and ticking clock for
+ * workers, freezing to ✓/✗ m:ss on completion. Also raises an
  * in-TUI toast plus opencode's cross-platform attention notification (desktop
  * notification + named sound, user-tunable in tui.json) when GIGGA asks a
  * question, finishes, or fails.
@@ -92,7 +92,6 @@ const PHASE_STEPS: Record<string, number> = {
 const PHASE_WORD: Record<string, string> = {
   recon: "RECON", questions: "QUESTIONS", plan: "PLAN", executing: "EXECUTE", checking: "CHECK",
 }
-const TIER_BUDGET_MS: Record<string, number> = { high: 20 * 60_000, medium: 10 * 60_000, low: 5 * 60_000 }
 
 function fmtClock(ms: number): string {
   const t = Math.max(0, Math.floor(ms / 1000))
@@ -116,13 +115,6 @@ function orchBar(phase: string, sec: number): string {
   if (phase === "failed" || step === 0) return "▓".repeat(step) + "░".repeat(6 - step)
   // Current stage flashes on/off (▓ ↔ ░), one flip per tick.
   return "▓".repeat(step - 1) + (sec % 2 ? "░" : "▓") + "░".repeat(6 - step)
-}
-
-function budgetBar(a: { tier: Tier }, ms: number): string {
-  const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
-  if (!budget) return ""
-  const cells = Math.max(1, Math.min(5, Math.ceil((ms / budget) * 5)))
-  return "▓".repeat(cells) + "░".repeat(5 - cells)
 }
 
 // Fasttrack/one-shot runs: a 2-cell gap races across a full bar, one cell
@@ -317,8 +309,8 @@ const tui: TuiPlugin = async (api) => {
         }
 
         // Two rows per subagent: row 1 = indicator light, type label, and the
-        // live instruments (spinner / budget bar / ticking clock, or the
-        // frozen ✓/✗ m:ss); row 2 = the concise task title, indented + muted.
+        // live instruments (spinner / ticking clock, or the frozen ✓/✗ m:ss);
+        // row 2 = the concise task title, indented + muted.
         const row = (a: AgentEntry, idx: number, last: boolean) => {
           const conn = last ? "└─" : "├─"
           const label = a.kind === "worker" ? `worker #${a.id}` : a.kind
@@ -351,14 +343,9 @@ const tui: TuiPlugin = async (api) => {
             )
           }
           // Accessors (not consts): they read sec() so Solid re-evaluates
-          // them on every 1s tick — the spinner animates and the clock/budget
-          // bar count up by the second even when the state file is unchanged.
+          // them on every 1s tick — the spinner animates and the clock counts
+          // up by the second even when the state file is unchanged.
           const spin = () => SPINNER[(sec() + idx) % SPINNER.length]
-          const bar = () => {
-            sec()
-            const ms = elapsedMs(a)
-            return a.kind === "worker" && a.tier && ms != null ? budgetBar(a, ms) : ""
-          }
           const clock = () => {
             sec()
             const ms = elapsedMs(a)
@@ -371,9 +358,6 @@ const tui: TuiPlugin = async (api) => {
                 <text fg={dotColor(a)} wrapMode="none">●</text>
                 <text fg={theme().text} wrapMode="none">{label}</text>
                 <text fg={theme().warning} wrapMode="none">{spin()}</text>
-                <Show when={bar() !== ""}>
-                  <text fg={theme().warning} wrapMode="none">{bar()}</text>
-                </Show>
                 <text fg={theme().warning} wrapMode="none">{clock()}</text>
               </box>
               {titleRow}

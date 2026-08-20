@@ -9,8 +9,8 @@
   while running, green once done, theme-independent) with a flashing
   current step and a ticking total-run clock to its right, one colored
   indicator light per subagent (green done · red failed · yellow running ·
-  dim spawning), tree rows with braille spinners, worker time-budget bars
-  + ticking m:ss clocks, ✓/✗ finals, 🎉 flash on completion. Driven by a
+  dim spawning), tree rows with braille spinners + ticking m:ss clocks,
+  ✓/✗ finals, 🎉 flash on completion. Driven by a
   1s mtime-gated poll of the per-project state.json; hidden when no GIGGA
   run exists.
 - Notifications that actually reach the TUI: question-pending / done /
@@ -42,8 +42,9 @@
   against late final-message updates). The plugin records session
   `createdAt` to tell fresh sessions from old ones.
 - Sidebar widget: two rows per subagent — row 1: indicator light, type
-  label (`recon` / `worker #N` / `checker`), spinner, budget bar, per-second
-  ticking clock; row 2: the concise task title. Worker `description`s are
+  label (`recon` / `worker #N` / `checker`), spinner, per-second ticking
+  clock (the workers' time-budget bar was dropped — timer only); row 2:
+  the concise task title. Worker `description`s are
   now mandated 2–5 words verb-first in the orchestrator prompt ("add
   finishing touches", not "procedurally adding finishing touches") — they
   are the sidebar titles. The ⚡ prefix is gone from the widget header.
