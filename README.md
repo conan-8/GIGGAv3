@@ -59,8 +59,15 @@ opencode.json backup).
   `~/.config/opencode/GIGGA/projects/<project>-<hash>/state.json` — multiple
   projects on one machine never collide. Interrupted runs (killed opencode)
   are marked `failed (interrupted)` on the next start.
-- **`/GIGGA-status`** — phase, agent table, pending-question state for the
-  current project.
+- **Self-improvement memory** (per project): the plugin appends one objective
+  record per finished run to `history.jsonl` (duration, tier overruns,
+  retries, checker rounds); after each full-pipeline run the orchestrator
+  reflects (PHASE 6) and appends ≤3 evidence-cited one-line lessons to
+  `lessons.md` (cap 20, self-consolidating) — and reads both back at session
+  start, so planning/tiering improve over time. The checker contributes
+  planning lessons via its verdict; it stays read-only.
+- **`/GIGGA-status`** — phase, agent table, pending-question state, last-run
+  record and lesson count for the current project.
 
 ## The two UIs
 

@@ -38,14 +38,26 @@ agent pack via a one-line curl installer.
   `chat.params` → `GIGGA/last-model.json`) and continues; `/GIGGA-setup`
   (GIGGA-config agent) and the dashboard config screen share one
   implementation (`dashboard/lib/shared.mjs`, also a CLI:
-  validate/apply/models/status/wizard) and ask a single batched confirm
+  validate/apply/models/status/projectdir/wizard) and ask a single batched confirm
   defaulting to the current model for all tiers. The wizard marks
   `configured: true`, rewrites agent model lines, and shows a 5-line cheat
   sheet.
 - **GIGGA-config is scope-limited**: bash allows only the shared CLI and
   `opencode models` (wildcard deny first — opencode uses last-match-wins).
 - **/GIGGA-status** command prints phase, agent table, pending-question
-  state for the current project.
+  state, last-run record and lesson count for the current project.
+- **Self-improvement memory** (per project): the plugin appends one record
+  per finished run to `history.jsonl` in the project state dir (outcome,
+  duration, retries, checker invocations, per-agent tier/status/duration and
+  budget overrun), claimed by `state.recordedAt` so restarts/duplicate
+  events record exactly once. The orchestrator reads `lessons.md` + the last
+  history lines at session start and reflects after each full-pipeline run
+  (PHASE 6): ≤3 one-line lessons, each citing this run's trigger (checker
+  gap, worker failure/retry, tier overrun); clean runs write nothing; the
+  file is capped at 20 lines and self-consolidates. The checker may add a
+  `LESSONS:` section to a FAIL verdict (planning mistakes only); it stays
+  read-only — the orchestrator transcribes. Fasttrack one-shots skip
+  reflection.
 - Terminal worker navigation is native (`session_child_cycle` etc.);
   documented in README, nothing auto-applied to tui.json.
 - Beep must work on macOS, Linux, and Windows.

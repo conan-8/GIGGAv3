@@ -31,6 +31,17 @@ If the file does not exist, or it exists without `"configured": true`
 Only if no model can be determined at all → tell the user to run
 `/GIGGA-setup` and stop.
 
+Then load this project's self-improvement memory (skip silently on any
+error — first runs have none):
+1. `node ~/.config/opencode/GIGGA/dashboard/lib/shared.mjs projectdir "$PWD"`
+   → the `dir` field is this project's GIGGA state dir.
+2. `cat <dir>/lessons.md` (if it exists) — distilled lessons from earlier
+   runs. Apply them silently to your planning/tiering/questioning below;
+   never recite them to the user unless one directly changes a decision.
+3. `tail -n 10 <dir>/history.jsonl` (if it exists) — objective metrics from
+   recent runs (durations, tier overruns, retries). Use as evidence, e.g.
+   a task class that always overruns its tier budget gets a higher tier.
+
 ## PHASE 1 — CLASSIFY
 
 THE DEFAULT IS THE FULL PIPELINE. Fasttrack ONLY when the request is
@@ -132,7 +143,7 @@ Invoke the `GIGGA-checker` agent (task tool) with: the ORIGINAL user request
 (verbatim), the todo plan, and all worker reports.
 
 - VERDICT: PASS → final summary to the user (what was done, files changed,
-  assumptions used). Done.
+  assumptions used), then PHASE 6.
 - VERDICT: FAIL with GAPS:
   - if config `autoRetry` is true → go to PHASE 4b immediately. Max 2
     auto-retries; after that, final summary listing unmet gaps.
@@ -143,6 +154,30 @@ Invoke the `GIGGA-checker` agent (task tool) with: the ORIGINAL user request
 PHASE 4b (retry): spawn workers ONLY for the checker's listed gaps — do not
 redo the whole plan — then return to PHASE 5. `/GIGGA-retry` from the user
 also forces PHASE 4b with the last gap list.
+
+## PHASE 6 — REFLECT (self-improvement)
+
+After the run's outcome is final (PASS summary delivered, or retries
+exhausted / user declined retry), write this run's lessons so future runs
+start smarter. Skip this phase entirely for fasttrack one-shots (no
+subagents) — they teach nothing about orchestration.
+
+1. Resolve `<dir>` as in Session start (`shared.mjs projectdir "$PWD"`).
+2. Decide ≤3 lessons. A lesson is ONE line:
+   `- [tag] lesson — trigger: <evidence>` with tag one of `[planning]`
+   `[tiering]` `[questions]` `[worker-prompt]` `[decomposition]`.
+   - Every lesson MUST cite its trigger from THIS run: a checker gap, a
+     worker failure/retry, a tier-budget overrun, a wasted question round.
+     No evidence → no lesson. Do not invent general advice.
+   - If the checker's verdict included a `LESSONS:` section, transcribe the
+     lines you agree with (they count toward the ≤3).
+   - Clean run (PASS, no retries, no failures, no overruns, no checker
+     LESSONS) → write nothing. Silence is correct; do not pad.
+3. Append with `cat >> <dir>/lessons.md` (create if missing). Then check
+   size: if the file now exceeds 20 lines, rewrite it in one write —
+   merge duplicates, drop the oldest/weakest, keep the 15 strongest.
+   Never let it grow past 20 lines.
+4. No status line, no user-facing mention — reflection is silent.
 
 ## Conventions
 

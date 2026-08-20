@@ -18,6 +18,19 @@
   attention notification (desktop notification + named sound when the
   terminal is unfocused; tunable via `attention` in tui.json; sounds respect
   the GIGGA `sound` config flag).
+- Self-improvement memory (per project): the plugin appends one objective
+  record per finished run to `history.jsonl` in the project state dir
+  (outcome, duration, retries, checker invocations, per-agent tier +
+  duration + budget overrun), claimed by `state.recordedAt` so duplicate
+  events never double-record. The orchestrator reads `lessons.md` + the last
+  history lines at session start, and after each full-pipeline run reflects
+  (PHASE 6): ≤3 one-line tagged lessons, each citing this run's trigger
+  (checker gap, worker failure/retry, tier overrun, wasted question round);
+  clean runs write nothing; the file caps at 20 lines and self-consolidates.
+  The checker may attach a `LESSONS:` section to a FAIL verdict (planning
+  mistakes only — it stays read-only; the orchestrator transcribes).
+  `/GIGGA-status` now also shows the last-run record and lesson count;
+  `shared.mjs` gains a `projectdir` CLI subcommand.
 
 ### Changed
 - Sidebar widget is now **session-scoped**: it renders only in the tab

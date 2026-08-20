@@ -241,6 +241,7 @@ export const CHEAT_SHEET = [
 //   node shared.mjs apply     <agentsDir> <config.json>
 //   node shared.mjs models
 //   node shared.mjs status    <projectDir> [cfgRoot]
+//   node shared.mjs projectdir <projectDir> [cfgRoot]  (print the per-project GIGGA dir)
 //   node shared.mjs wizard    <cfgRoot> <json>   (write config + apply + mark configured)
 if (process.argv[1] && process.argv[1].endsWith("shared.mjs") && process.argv.length > 2) {
   const [, , cmd, ...rest] = process.argv
@@ -260,7 +261,20 @@ if (process.argv[1] && process.argv[1].endsWith("shared.mjs") && process.argv.le
     } else if (cmd === "status") {
       const cfgRoot = rest[1] ?? process.env.GIGGA_HOME ?? join(process.env.HOME, ".config", "opencode")
       const state = await readProjectState(rest[0], cfgRoot)
-      out({ ok: true, state })
+      const dir = dirname(projectStatePath(rest[0], cfgRoot))
+      let lastRun = null
+      try {
+        const lines = (await readFile(join(dir, "history.jsonl"), "utf8")).split("\n").filter(Boolean)
+        lastRun = JSON.parse(lines[lines.length - 1])
+      } catch {}
+      let lessons = 0
+      try {
+        lessons = (await readFile(join(dir, "lessons.md"), "utf8")).split("\n").filter((l) => l.trim()).length
+      } catch {}
+      out({ ok: true, state, lastRun, lessons })
+    } else if (cmd === "projectdir") {
+      const cfgRoot = rest[1] ?? process.env.GIGGA_HOME ?? join(process.env.HOME, ".config", "opencode")
+      out({ ok: true, dir: dirname(projectStatePath(rest[0], cfgRoot)) })
     } else if (cmd === "wizard") {
       // rest: cfgRoot, configJson (validated, models already checked by caller)
       const cfgRoot = rest[0]

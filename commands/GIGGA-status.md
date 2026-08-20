@@ -13,6 +13,9 @@ Formatting rules:
   (truncate to 60 chars), session id (or `-`).
 - If `agents` is empty: "No GIGGA run in this project yet — Tab to GIGGA and
   make a request."
+- If `lastRun` is present, one line: `last run: <phase> · <duration mm:ss> ·
+  <retries> retries` plus `failed (<failReason>)` when it failed.
+- If `lessons` > 0, one line: `self-improvement: <lessons> lessons recorded`.
 - No file edits, no follow-up questions.
 
 State JSON:

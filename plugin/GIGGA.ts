@@ -87,6 +87,7 @@ interface RunState {
   runStartedAt?: string
   doneAt?: string
   failReason?: "error" | "interrupted"
+  recordedAt?: string
 }
 
 const freshState = (): RunState => ({
@@ -105,6 +106,7 @@ const freshState = (): RunState => ({
   runStartedAt: undefined,
   doneAt: undefined,
   failReason: undefined,
+  recordedAt: undefined,
 })
 
 let serverUrl: URL | null = null
@@ -186,6 +188,7 @@ async function writeState(s: RunState) {
     runStartedAt: s.runStartedAt,
     doneAt: s.doneAt,
     failReason: s.failReason,
+    recordedAt: s.recordedAt,
   }
   const tmp = `${STATE_TMP}.${process.pid}.${Date.now()}${Math.random().toString(36).slice(2, 6)}`
   await writeFile(tmp, JSON.stringify(full, null, 2) + "\n")
@@ -496,7 +499,62 @@ async function recoverStale() {
   })
   if (acted) {
     await log("recovered stale run: working agents marked failed (interrupted)")
+    await recordRun(await readState())
     await refreshSidebar() // renders the ✗ final titles, then the sweep stops itself
+  }
+}
+
+// ------------------------------------------- run history (self-improvement) -
+// One JSON line per finished run in <project dir>/history.jsonl — objective
+// metrics (durations, tier overruns, retries, checker rounds) the
+// orchestrator reads at session start to plan better over time. Written at
+// the terminal transitions only; state.recordedAt claims the write so
+// duplicate events / multiple plugin instances record exactly once.
+const HISTORY_FILE = () => join(STATE_DIR, "history.jsonl")
+
+function buildRunRecord(s: RunState) {
+  const end = s.doneAt ? Date.parse(s.doneAt) : Date.now()
+  const start = s.runStartedAt ? Date.parse(s.runStartedAt) : end
+  const agents = s.agents
+    .filter((a) => a.kind !== "orchestrator")
+    .map((a) => {
+      const dur = elapsedMs(a)
+      const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
+      return {
+        kind: a.kind,
+        tier: a.tier ?? undefined,
+        status: a.status,
+        durationMs: dur ?? undefined,
+        overBudget: budget != null && dur != null ? dur > budget : undefined,
+      }
+    })
+  return {
+    ts: new Date().toISOString(),
+    phase: s.phase,
+    failReason: s.failReason,
+    request: shortTask(s.originalRequest, 120),
+    durationMs: isFinite(end - start) ? Math.max(0, end - start) : undefined,
+    retries: s.retries,
+    checkerInvocations: s.agents.filter((a) => a.kind === "checker").length,
+    agents,
+  }
+}
+
+async function recordRun(s: RunState) {
+  if (s.phase !== "done" && s.phase !== "failed") return
+  const rec = buildRunRecord(s)
+  const claimed = await update((st) => {
+    if (st.recordedAt || (st.phase !== "done" && st.phase !== "failed")) return false
+    st.recordedAt = new Date().toISOString()
+    return true
+  })
+  if (!claimed) return
+  try {
+    await mkdir(STATE_DIR, { recursive: true })
+    await appendFile(HISTORY_FILE(), JSON.stringify(rec) + "\n")
+    await log(`run recorded: ${rec.phase}${rec.failReason ? ` (${rec.failReason})` : ""} ${rec.durationMs ?? "?"}ms agents=${rec.agents.length} retries=${rec.retries}`)
+  } catch (e) {
+    await log(`run record failed: ${String(e)}`)
   }
 }
 
@@ -873,8 +931,10 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       if (acted) {
         await log(`session.idle ${sid}`)
         const s2 = await readState()
-        if (sid === s2.orchestrator) await announcePhase(s2) // "done" toast; sweep flashes 🎉 then settles ✓
-        else await refreshSidebar(s2)
+        if (sid === s2.orchestrator) {
+          await recordRun(s2)
+          await announcePhase(s2) // "done" toast; sweep flashes 🎉 then settles ✓
+        } else await refreshSidebar(s2)
       }
       return
     }
@@ -890,7 +950,9 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       })
       if (acted) {
         await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
-        await announcePhase(await readState()) // error toast + ✗ final titles
+        const s2 = await readState()
+        await recordRun(s2)
+        await announcePhase(s2) // error toast + ✗ final titles
       }
       return
     }
