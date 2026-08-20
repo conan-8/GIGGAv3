@@ -268,20 +268,30 @@ const tui: TuiPlugin = async (api) => {
               </box>
             )
           }
-          const spin = SPINNER[(sec() + idx) % SPINNER.length]
-          const ms = elapsedMs(a)
-          const bar = a.kind === "worker" && a.tier && ms != null ? budgetBar(a, ms) : ""
-          const clock = ms != null ? fmtClock(ms) : ""
+          // Accessors (not consts): they read sec() so Solid re-evaluates
+          // them on every 1s tick — the spinner animates and the clock/budget
+          // bar count up by the second even when the state file is unchanged.
+          const spin = () => SPINNER[(sec() + idx) % SPINNER.length]
+          const bar = () => {
+            sec()
+            const ms = elapsedMs(a)
+            return a.kind === "worker" && a.tier && ms != null ? budgetBar(a, ms) : ""
+          }
+          const clock = () => {
+            sec()
+            const ms = elapsedMs(a)
+            return ms != null ? fmtClock(ms) : ""
+          }
           return (
             <box flexDirection="row" gap={1}>
               <text fg={theme().textMuted} wrapMode="none">{conn}</text>
               <text fg={dotColor(a)} wrapMode="none">●</text>
               <text fg={theme().text} wrapMode="none">{name}</text>
-              <text fg={theme().accent} wrapMode="none">{spin}</text>
-              <Show when={bar !== ""}>
-                <text fg={theme().warning} wrapMode="none">{bar}</text>
+              <text fg={theme().warning} wrapMode="none">{spin()}</text>
+              <Show when={bar() !== ""}>
+                <text fg={theme().warning} wrapMode="none">{bar()}</text>
               </Show>
-              <text fg={theme().textMuted} wrapMode="none">{clock}</text>
+              <text fg={theme().warning} wrapMode="none">{clock()}</text>
             </box>
           )
         }
