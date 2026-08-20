@@ -10,7 +10,7 @@ One row per requirement from SPEC.md. Evidence key:
 
 | # | requirement (SPEC.md) | how verified | evidence | status |
 |---|---|---|---|---|
-| 1 | Primary agent `GIGGA` (all-caps, red #f7768e), Tab-switchable like Plan/Build | `mode: primary` in agents/GIGGA.md; server `/agent` lists `GIGGA \| primary \| color: #f7768e`; sessions run with agent=GIGGA (rename verified 2026-08-19) | S2 outputs + rename verification (session ran under GIGGA) | ✅ |
+| 1 | Primary agent `GIGGA` (all-caps, red #ff3333), Tab-switchable like Plan/Build | `mode: primary` in agents/GIGGA.md; server `/agent` lists `GIGGA \| primary \| color: #ff3333`; sessions run with agent=GIGGA (rename verified 2026-08-19; color updated to proper red 2026-08-19) | S2 outputs + rename verification (session ran under GIGGA) | ✅ |
 | 2 | Simple question / one-step task → answered directly, no pipeline | scenario A: direct answer, no recon/workers spawned (originally via dedicated fasttrack agent; now GIGGA one-shots it itself) | S2/S4 regression A + post-change verification | ✅ |
 | 3 | Everything else → read-only recon inspects repo + request | task streams show `GIGGA-recon` invoked before workers | S2 B, S4 regression B | ✅ |
 | 4 | Clarifying questions, MAX 2 rounds; then explicit assumptions | recon invoked ≤2× per run; assumptions quoted in finals; plugin cap enforcement | S4 session4 E8 (questionRounds=1 held); S4 regression F PASS; cap log line in plugin events.log | ✅ |

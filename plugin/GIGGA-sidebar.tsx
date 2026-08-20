@@ -26,7 +26,7 @@
  */
 
 import type { TuiPlugin, TuiPluginModule, TuiSlotContext } from "@opencode-ai/plugin/tui"
-import { TextAttributes } from "@opentui/core"
+import { RGBA, TextAttributes } from "@opentui/core"
 import { createSignal, For, Show } from "solid-js"
 import { readFile, stat } from "node:fs/promises"
 import { createHash } from "node:crypto"
@@ -123,6 +123,10 @@ function budgetBar(a: { tier: Tier }, ms: number): string {
 }
 
 const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
+
+// Proper red for the GIGGA brand — theme-independent (theme().error is
+// pinkish in some themes); matches the agent frontmatter color (#ff3333).
+const GIGGA_RED = RGBA.fromInts(255, 51, 51)
 
 // ------------------------------------------------------------------ plugin -
 const tui: TuiPlugin = async (api) => {
@@ -300,7 +304,7 @@ const tui: TuiPlugin = async (api) => {
           <Show when={visible()}>
             <box flexDirection="column" paddingTop={0} paddingBottom={0} gap={0}>
               <box flexDirection="row" gap={1}>
-                <text fg={theme().error} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
+                <text fg={GIGGA_RED} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
                 <text fg={headerColor()} wrapMode="none">{headerText()}</text>
               </box>
               <Show when={dots().length > 0}>
