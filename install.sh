@@ -73,6 +73,7 @@ mkdir -p "$GIGGA_HOME/agents" "$GIGGA_HOME/commands" "$GIGGA_HOME/plugins" "$GIG
 cp "$SRC"/agents/*.md        "$GIGGA_HOME/agents/"
 cp "$SRC"/commands/*.md      "$GIGGA_HOME/commands/"
 cp "$SRC"/plugin/GIGGA.ts    "$GIGGA_HOME/plugins/"
+cp "$SRC"/plugin/GIGGA-sidebar.tsx "$GIGGA_HOME/plugins/"
 cp "$SRC"/GIGGA.config.default.json "$GIGGA_DIR/"
 
 # dashboard (server + UI + launcher)
@@ -175,12 +176,97 @@ else
   fi
 fi
 
+# ------------------------------------------- merge tui.json plugin entry ---
+# The sidebar widget is a TUI plugin (slot API) registered via the "plugin"
+# array in tui.json. Existing entries (e.g. a tps plugin) are preserved.
+TUI_JSON="$GIGGA_HOME/tui.json"
+merge_tui_json() {
+  # merge_tui_json <file> — ensures ./plugins/GIGGA-sidebar.tsx in .plugin[].
+  # Prefers node, then bun, then python3. Prints merged JSON to stdout.
+  if command -v node >/dev/null 2>&1; then
+    node -e '
+      const fs = require("fs");
+      let raw = "";
+      try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch {}
+      raw = raw.trim();
+      if (raw.startsWith("//") || raw.startsWith("/*")) {
+        console.error("jsonc");
+        process.exit(3);
+      }
+      let cfg = {};
+      try { cfg = raw ? JSON.parse(raw) : {}; } catch (e) {
+        console.error("jsonc");
+        process.exit(3);
+      }
+      cfg.$schema = cfg.$schema ?? "https://opencode.ai/tui.json";
+      const entry = "./plugins/GIGGA-sidebar.tsx";
+      cfg.plugin = Array.isArray(cfg.plugin) ? cfg.plugin : [];
+      if (!cfg.plugin.includes(entry)) cfg.plugin.push(entry);
+      process.stdout.write(JSON.stringify(cfg, null, 2) + "\n");
+    ' "$1"
+  elif command -v bun >/dev/null 2>&1; then
+    bun -e '
+      const fs = require("fs");
+      let raw = "";
+      try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch {}
+      raw = raw.trim();
+      if (raw.startsWith("//") || raw.startsWith("/*")) { console.error("jsonc"); process.exit(3); }
+      let cfg = {};
+      try { cfg = raw ? JSON.parse(raw) : {}; } catch { console.error("jsonc"); process.exit(3); }
+      cfg.$schema = cfg.$schema ?? "https://opencode.ai/tui.json";
+      const entry = "./plugins/GIGGA-sidebar.tsx";
+      cfg.plugin = Array.isArray(cfg.plugin) ? cfg.plugin : [];
+      if (!cfg.plugin.includes(entry)) cfg.plugin.push(entry);
+      process.stdout.write(JSON.stringify(cfg, null, 2) + "\n");
+    ' "$1"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" <<'PYEOF'
+import json, sys
+try:
+    raw = open(sys.argv[1]).read().strip() if len(sys.argv) > 1 else ""
+except FileNotFoundError:
+    raw = ""
+if raw.startswith("//") or raw.startswith("/*"):
+    sys.exit(3)
+cfg = json.loads(raw) if raw else {}
+cfg.setdefault("$schema", "https://opencode.ai/tui.json")
+entry = "./plugins/GIGGA-sidebar.tsx"
+plugins = cfg.get("plugin")
+if not isinstance(plugins, list):
+    plugins = []
+if entry not in plugins:
+    plugins.append(entry)
+cfg["plugin"] = plugins
+print(json.dumps(cfg, indent=2))
+PYEOF
+  else
+    return 1
+  fi
+}
+
+if [ -f "$TUI_JSON" ] && grep -qE '^\s*(//|/\*)' "$TUI_JSON" 2>/dev/null; then
+  err "Your tui.json appears to contain comments (JSONC)."
+  err "Automatic merge skipped. Please add \"./plugins/GIGGA-sidebar.tsx\" to its \"plugin\" array yourself."
+else
+  if MERGED="$(merge_tui_json "$TUI_JSON")"; then
+    if [ -f "$TUI_JSON" ]; then
+      cp "$TUI_JSON" "$TUI_JSON.backup.$(date +%Y%m%d%H%M%S)"
+    fi
+    printf '%s\n' "$MERGED" > "$TUI_JSON"
+    msg "Registered plugins/GIGGA-sidebar.tsx in tui.json (backup kept)."
+  else
+    err "No node/bun/python3 found for JSON merge."
+    err "Please add \"./plugins/GIGGA-sidebar.tsx\" to the \"plugin\" array in $TUI_JSON yourself."
+  fi
+fi
+
 # ------------------------------------------------------------- next steps --
 AGENT_COUNT=$(ls "$GIGGA_HOME/agents"/GIGGA*.md 2>/dev/null | wc -l | tr -d ' ')
 CMD_COUNT=$(ls "$GIGGA_HOME/commands"/GIGGA-*.md 2>/dev/null | wc -l | tr -d ' ')
 msg ""
 msg "GIGGA installed into $GIGGA_HOME:"
 msg "  agents/    ($AGENT_COUNT agents)   commands/ ($CMD_COUNT commands)   plugins/GIGGA.ts"
+msg "  plugins/GIGGA-sidebar.tsx (TUI sidebar widget, registered in tui.json)"
 msg "  GIGGA/GIGGA.config.json"
 msg ""
 msg "Next steps:"

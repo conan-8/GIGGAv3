@@ -22,15 +22,24 @@ test("projectStatePath: stable, namespaced, collision-resistant", () => {
   assert.notEqual(a, a2, "trailing slash should hash differently (documented behavior)")
 })
 
-test("projectStatePath parity with plugin/GIGGA.ts (node --experimental-strip-types)", async () => {
-  const mod = await import("../../plugin/GIGGA.ts")
-  for (const dir of ["/home/me/proj", "/srv/weird name/x", "C:\\repo"]) {
-    assert.equal(
-      mod.projectStatePath(dir, "/cfg"),
-      projectStatePath(dir, "/cfg"),
-      `parity failed for ${dir}`,
-    )
+test("projectStatePath parity across dashboard, backend plugin, TUI plugin", async () => {
+  // plugin/GIGGA.ts must export exactly one function (DEVIATIONS #28) and the
+  // TUI plugin is JSX — neither can be imported here. All three copies are
+  // therefore compared as normalized source text (types/whitespace stripped).
+  const files = {
+    "dashboard/lib/shared.mjs": new URL("../lib/shared.mjs", import.meta.url),
+    "plugin/GIGGA.ts": new URL("../../plugin/GIGGA.ts", import.meta.url),
+    "plugin/GIGGA-sidebar.tsx": new URL("../../plugin/GIGGA-sidebar.tsx", import.meta.url),
   }
+  const bodies = {}
+  for (const [name, url] of Object.entries(files)) {
+    const src = await readFile(url, "utf8")
+    const m = /(?:export )?function projectStatePath\([\s\S]*?\n\}/.exec(src)
+    assert.ok(m, `projectStatePath not found in ${name}`)
+    bodies[name] = m[0].replace(/^export /, "").replace(/: string/g, "").replace(/\s+/g, "")
+  }
+  assert.equal(bodies["plugin/GIGGA.ts"], bodies["dashboard/lib/shared.mjs"], "plugin/GIGGA.ts diverged from dashboard/lib/shared.mjs")
+  assert.equal(bodies["plugin/GIGGA-sidebar.tsx"], bodies["dashboard/lib/shared.mjs"], "plugin/GIGGA-sidebar.tsx diverged from dashboard/lib/shared.mjs")
 })
 
 test("recoverStaleState marks interrupted workers failed", async () => {

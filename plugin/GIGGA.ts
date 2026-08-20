@@ -11,7 +11,8 @@ import { createHash } from "node:crypto"
  *   <cfgRoot>/GIGGA/projects/<slug>-<hash10>/state.json
  * (cfgRoot = GIGGA_HOME or ~/.config/opencode; slug+hash derive from the
  * project/worktree dir — see projectStatePath, mirrored in
- * dashboard/lib/shared.mjs with a conformance test).
+ * dashboard/lib/shared.mjs and plugin/GIGGA-sidebar.tsx with a conformance
+ * test in dashboard/test/session4.test.mjs).
  *
  * Also: server discovery (server.json), stale-run recovery on load,
  * pending-question signaling (bell + toast), phase-transition toasts, and a
@@ -106,6 +107,22 @@ const freshState = (): RunState => ({
 })
 
 let serverUrl: URL | null = null
+// In plain TUI mode opencode listens on NO port — serverUrl points at the
+// default http://localhost:4096/ with nothing behind it (DEVIATIONS #29).
+// Probed once at load; when unreachable the title sidebar + HTTP toasts are
+// skipped (plugins/GIGGA-sidebar.tsx renders progress + notifications
+// in-TUI instead). Title PATCHes still work when attached to `opencode serve`.
+let serverReachable = false
+
+async function probeServer(): Promise<boolean> {
+  if (!serverUrl) return false
+  try {
+    const r = await fetch(new URL("global/health", serverUrl), { signal: AbortSignal.timeout(1000) })
+    return r.ok
+  } catch {
+    return false
+  }
+}
 
 async function log(line: string) {
   try {
@@ -221,7 +238,7 @@ async function bell() {
 }
 
 async function toast(message: string, variant: "info" | "warning" | "error" | "success") {
-  if (!serverUrl) return
+  if (!serverUrl || !serverReachable) return
   try {
     const res = await fetch(new URL("tui/show-toast", serverUrl), {
       method: "POST",
@@ -235,9 +252,12 @@ async function toast(message: string, variant: "info" | "warning" | "error" | "s
 }
 
 // TUI sidebar integration (verified opencode 1.18.18, DEVIATIONS #27): the
-// sidebar (ctrl+x b) lists sessions by title, and titles are live-updatable.
+// sidebar (ctrl+x b) lists sessions by title, and titles are live-updatable —
+// but ONLY when an opencode HTTP server is reachable (serve/attach mode; in
+// plain TUI mode nothing listens, see DEVIATIONS #29, and the GIGGA-sidebar
+// TUI slot plugin renders the same progress in the sidebar instead).
 async function setTitle(sessionID: string | null | undefined, title: string): Promise<boolean> {
-  if (!serverUrl || !sessionID) return false
+  if (!serverUrl || !serverReachable || !sessionID) return false
   try {
     const res = await fetch(new URL(`session/${sessionID}`, serverUrl), {
       method: "PATCH",
@@ -402,7 +422,7 @@ async function sweepTick(pre?: RunState) {
 
 // Render now and keep the sweep alive while the run is active.
 async function refreshSidebar(s?: RunState) {
-  if (!serverUrl) return
+  if (!serverUrl || !serverReachable) return
   if (!sweepTimer) {
     sweepTimer = setInterval(() => {
       sweepTick().catch(async (e) => {
@@ -527,6 +547,11 @@ export const GiggaPlugin: Plugin = async (input) => {
       ) + "\n",
     )
   } catch {}
+
+  serverReachable = await probeServer()
+  if (!serverReachable) {
+    await log("server unreachable (plain TUI mode hosts no HTTP listener — DEVIATIONS #29): title sidebar + HTTP toasts disabled; the GIGGA-sidebar TUI plugin renders progress in the sidebar instead")
+  }
 
   // migrate legacy global state (sessions ≤3): rename it aside, never read
   try {

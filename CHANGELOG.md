@@ -2,7 +2,33 @@
 
 ## Unreleased
 
+### Added
+- TUI sidebar widget (`plugins/GIGGA-sidebar.tsx`, registered in
+  `~/.config/opencode/tui.json` by the installer): a real sidebar view via
+  opencode's TUI slot API showing the live run — 6-step phase bar with
+  pulsing current step, one colored indicator light per subagent
+  (green done · red failed · yellow running · dim spawning), tree rows with
+  braille spinners, worker time-budget bars + ticking m:ss clocks, ✓/✗
+  finals, 🎉 flash on completion. Driven by a 1s mtime-gated poll of the
+  per-project state.json; hidden when no GIGGA run exists.
+- Notifications that actually reach the TUI: question-pending / done /
+  failed transitions raise an in-TUI toast plus opencode's cross-platform
+  attention notification (desktop notification + named sound when the
+  terminal is unfocused; tunable via `attention` in tui.json; sounds respect
+  the GIGGA `sound` config flag).
+
 ### Fixed
+- TUI sidebar and toasts never appeared in plain TUI mode: the backend
+  plugin PATCHed session titles / POSTed toasts to `serverUrl`, but the TUI
+  hosts no HTTP server (DEVIATIONS #29), so every call failed with "Unable
+  to connect" — retried every second, spamming events.log. The plugin now
+  probes `serverUrl/global/health` once at load and skips the title sweep +
+  HTTP toasts when unreachable (title tree still renders when attached to
+  `opencode serve`); the slot widget above renders progress in-TUI instead.
+- The `projectStatePath` parity test imported a deliberately private helper
+  from plugin/GIGGA.ts (broken since the export-shape fix); it now compares
+  normalized source text across all three copies (dashboard lib, backend
+  plugin, TUI plugin).
 - Plugin was silently failing to load in opencode (`failed to load plugin …
   "Plugin export is not a function"` / `"path" property must be of type
   string` in opencode.log): the 1.18.18 loader calls **every** module export

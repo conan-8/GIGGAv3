@@ -62,16 +62,19 @@ opencode.json backup).
 
 **1. opencode TUI** — `GIGGA` in the Tab agent cycle; bell + toast on pending
 questions; commands `/GIGGA-setup`, `/GIGGA-fasttrack`, `/GIGGA-retry`,
-`/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) doubles as a live progress
-tree**: the GIGGA row carries a 6-step phase bar with a pulsing current step
-plus one traffic-light dot per subagent (🟢 done · ❌ failed · 🟡 running ·
-🔴 spawning), and every subagent gets its own row — status dot, braille
-spinner, and for workers a time-budget bar (elapsed vs tier budget, H 20m ·
-M 10m · L 5m) with a ticking clock, freezing to `✓ m:ss` / `✗ m:ss` when it
-lands; a finished run flashes 🎉 and settles to
-`✓ GIGGA ▓▓▓▓▓▓ done · 12:30 · 4 workers`. The sidebar can't render widgets,
-so this is pure title text animated by a 1-second sweep — select any row to
-open that worker's conversation. Worker views are also reachable inline:
+`/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) shows a live GIGGA progress
+widget** — a real sidebar view rendered by `plugins/GIGGA-sidebar.tsx`
+through opencode's TUI slot API (registered in `tui.json` by the installer):
+a 6-step phase bar with a pulsing current step, one indicator light per
+subagent (green done · red failed · yellow running · dim spawning), and one
+tree row per subagent — status dot, braille spinner, and for workers a
+time-budget bar (elapsed vs tier budget, H 20m · M 10m · L 5m) with a
+ticking clock, freezing to `✓ m:ss` / `✗ m:ss` when it lands; a finished
+run flashes 🎉 and settles to `✓ ▓▓▓▓▓▓ done · 12:30 · 4 workers`. When
+GIGGA asks a question, finishes, or fails, the widget raises an in-TUI
+toast plus opencode's cross-platform attention notification (desktop
+notification + named sound when the terminal is unfocused — tunable via
+`attention` in `tui.json`). Worker views are also reachable inline:
 `→`/`←` cycles child (subagent) sessions, `↑` returns to
 the parent (`session_child_cycle` & friends — already the defaults). Prefer
 other keys? Drop this in `~/.config/opencode/tui.json` (not applied by
@@ -80,6 +83,11 @@ GIGGA):
 ```json
 { "keybinds": { "session_child_cycle": "ctrl+right", "session_parent": "ctrl+up" } }
 ```
+
+When the TUI is attached to `opencode serve` instead of running standalone,
+the backend plugin additionally animates the sidebar's session **titles**
+with the same tree (plain text + emoji dots — the only styling titles
+support); in plain TUI mode those title PATCHes are skipped automatically.
 
 **2. GIGGA dashboard** — run `GIGGA-dashboard` (installed to
 `~/.local/bin`, default port 4399, auto-falls back to a free port, opens your

@@ -21,7 +21,23 @@ done
 for f in GIGGA-setup GIGGA-fasttrack GIGGA-retry GIGGA-status; do
   rm -f "$GIGGA_HOME/commands/$f.md"
 done
-rm -f "$GIGGA_HOME/plugins/GIGGA.ts"
+rm -f "$GIGGA_HOME/plugins/GIGGA.ts" "$GIGGA_HOME/plugins/GIGGA-sidebar.tsx"
+
+# Remove our TUI plugin entry from tui.json (other plugin entries untouched).
+TUI_JSON="$GIGGA_HOME/tui.json"
+if [ -f "$TUI_JSON" ] && command -v node >/dev/null 2>&1; then
+  node -e '
+    const fs = require("fs");
+    const p = process.argv[1];
+    try {
+      const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (Array.isArray(cfg.plugin)) {
+        cfg.plugin = cfg.plugin.filter((e) => e !== "./plugins/GIGGA-sidebar.tsx");
+        fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
+      }
+    } catch {}
+  ' "$TUI_JSON" && msg "Removed GIGGA-sidebar.tsx from tui.json"
+fi
 
 # Dashboard launcher (the dashboard itself lives under GIGGA/, removed above).
 rm -f "$HOME/.local/bin/GIGGA-dashboard" "$HOME/.local/bin/gigga-dashboard"

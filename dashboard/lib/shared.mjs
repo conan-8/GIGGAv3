@@ -12,8 +12,9 @@ import { fileURLToPath } from "node:url"
 export const TIERS = ["low", "medium", "high"]
 
 // ------------------------------------------------------ per-project state --
-// MUST stay in sync with projectStatePath in plugin/GIGGA.ts — a conformance
-// test (dashboard/test/parity.test.mjs) imports both and asserts equality.
+// MUST stay in sync with projectStatePath in plugin/GIGGA.ts and
+// plugin/GIGGA-sidebar.tsx — a conformance test
+// (dashboard/test/session4.test.mjs) asserts all three copies are identical.
 export function projectStatePath(projectDir, cfgRoot) {
   const slug = basename(projectDir).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 40) || "project"
   const hash = createHash("sha256").update(projectDir).digest("hex").slice(0, 10)
