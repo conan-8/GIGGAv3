@@ -18,8 +18,10 @@ Then:
 
 1. Restart opencode.
 2. Press **Tab** to switch to the `GIGGA` agent (next to Plan/Build).
-3. First request → GIGGA walks you through `/GIGGA-setup` (pick tier models
-   from your own providers, maxParallel, autoRetry, sound).
+3. First request → GIGGA auto-configures all model tiers to the model you're
+   currently using (recorded per prompt by the plugin) and gets to work —
+   no setup questions. `/GIGGA-setup` changes tiers/settings later (one
+   batched confirm, defaults to your current model for all tiers).
 
 Uninstall: `bash uninstall.sh` (removes only GIGGA files, restores your
 opencode.json backup).
@@ -43,7 +45,9 @@ opencode.json backup).
   questions (≤ `questionRounds` rounds — enforced by the plugin, which
   silently drops questions past the cap — then explicit assumptions).
 - **Numbered workers** (`GIGGA-worker-low/medium/high`) run in parallel
-  (≤ `maxParallel`); hard tasks may spawn sub-subagents (`subagent_depth: 2`).
+  (≤ `maxParallel`); the plan decomposes aggressively into small,
+  single-concern tasks (one file per worker per batch, easy tasks on the low
+  tier); hard tasks may spawn sub-subagents (`subagent_depth: 2`).
 - **Read-only checker** (`GIGGA-checker`) verifies the result against your
   original request; auto-retry (≤ 2) or ask, per config.
 - **Fasttrack** (a mode of GIGGA, not a separate agent): automatic for
@@ -65,12 +69,20 @@ questions; commands `/GIGGA-setup`, `/GIGGA-fasttrack`, `/GIGGA-retry`,
 `/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) shows a live GIGGA progress
 widget** — a real sidebar view rendered by `plugins/GIGGA-sidebar.tsx`
 through opencode's TUI slot API (registered in `tui.json` by the installer):
-a 6-step phase bar with a pulsing current step, one indicator light per
-subagent (green done · red failed · yellow running · dim spawning), and one
-tree row per subagent — status dot, braille spinner, and for workers a
-time-budget bar (elapsed vs tier budget, H 20m · M 10m · L 5m) with a
-ticking clock, freezing to `✓ m:ss` / `✗ m:ss` when it lands; a finished
-run flashes 🎉 and settles to `✓ ▓▓▓▓▓▓ done · 12:30 · 4 workers`. When
+a 6-step phase bar with a pulsing current step (a racing bar during
+fasttrack one-shots, plus a `» FASTTRACK ARMED` line while the fasttrack
+flag is set), one indicator light per subagent (green done · red failed ·
+yellow running · dim spawning), and two rows per subagent — the first with
+its status light, type label (`recon` / `worker #N` / `checker`), braille
+spinner and, for workers, a time-budget bar (elapsed vs tier budget, H 20m ·
+M 10m · L 5m) with a ticking per-second clock; the second with its concise
+task title — freezing to `✓ m:ss` / `✗ m:ss` when it lands. The widget is
+**session-scoped**: it renders only in the tab viewing the GIGGA run's
+session — other tabs/sessions stay clean, and a brand-new GIGGA session
+shows `░░░░░░ READING` until its first update lands (a new prompt in a
+finished run's session starts a fresh run — previous progress never carries
+over). A finished run
+flashes 🎉 and settles to `✓ ▓▓▓▓▓▓ done · 12:30 · 4 workers`. When
 GIGGA asks a question, finishes, or fails, the widget raises an in-TUI
 toast plus opencode's cross-platform attention notification (desktop
 notification + named sound when the terminal is unfocused — tunable via
@@ -103,7 +115,10 @@ bun). See [dashboard/README.md](dashboard/README.md).
 
 ## Configuration
 
-`~/.config/opencode/GIGGA/GIGGA.config.json` — managed by `/GIGGA-setup`
+`~/.config/opencode/GIGGA/GIGGA.config.json` — on the first GIGGA run it is
+auto-written with all three tiers set to the model you sent the prompt with
+(the plugin records the prompt-time model to `GIGGA/last-model.json` via
+`chat.params`). Managed afterwards by `/GIGGA-setup`
 (the `GIGGA-config` agent), the dashboard's config screen, or the shared CLI
 (`node …/GIGGA/dashboard/lib/shared.mjs`). One implementation backs all
 three. The installer never overwrites an existing config.

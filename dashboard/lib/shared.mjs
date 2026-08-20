@@ -77,7 +77,9 @@ export function validateConfig(cfg, availableModels) {
   } else {
     for (const t of TIERS) {
       const m = tiers[t]
-      if (typeof m !== "string" || !/^[^/\s]+\/[\w.-]+$/.test(m)) {
+      // provider/non-empty-model — the model id may itself contain slashes
+      // (e.g. local providers keyed by a file path: llamacpp//home/u/m.gguf)
+      if (typeof m !== "string" || !/^[^/\s]+\/\S+$/.test(m)) {
         errors.push(`tiers.${t}: expected "provider/model-id" string, got ${JSON.stringify(m)}`)
       } else if (Array.isArray(availableModels) && availableModels.length && !availableModels.includes(m)) {
         errors.push(`tiers.${t}: "${m}" is not among the available opencode models`)

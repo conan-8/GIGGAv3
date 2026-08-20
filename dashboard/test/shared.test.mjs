@@ -46,6 +46,16 @@ test("validateConfig without a model list only checks shape", () => {
   assert.equal(validateConfig(cfg).ok, true)
 })
 
+test("validateConfig accepts path-like model ids (local providers)", () => {
+  // local providers key models by file path: llamacpp//home/user/.cache/x.gguf
+  const cfg = defaultConfig()
+  cfg.tiers.low = "llamacpp//home/user/.cache/huggingface/models--x/model.gguf"
+  assert.equal(validateConfig(cfg).ok, true)
+  // but a missing provider or empty model id is still rejected
+  assert.equal(validateConfig({ ...cfg, tiers: { ...cfg.tiers, low: "noslash" } }).ok, false)
+  assert.equal(validateConfig({ ...cfg, tiers: { ...cfg.tiers, low: "provider/" } }).ok, false)
+})
+
 test("applyTierModels rewrites worker markers and orchestrator model", async () => {
   const dir = await mkdtemp(join(tmpdir(), "GIGGA-agents-"))
   for (const t of ["low", "medium", "high"]) {

@@ -17,6 +17,39 @@
   terminal is unfocused; tunable via `attention` in tui.json; sounds respect
   the GIGGA `sound` config flag).
 
+### Changed
+- Sidebar widget is now **session-scoped**: it renders only in the tab
+  viewing the run's session (orchestrator or one of its subagents) — other
+  opencode tabs/sessions in the same project no longer show the run. A
+  brand-new GIGGA session shows `░░░░░░ READING` until its first state
+  update lands, instead of the previous run's leftover tree; and a new
+  prompt in a finished run's session now resets to a fresh run (>3s guard
+  against late final-message updates). The plugin records session
+  `createdAt` to tell fresh sessions from old ones.
+- Sidebar widget: two rows per subagent — row 1: indicator light, type
+  label (`recon` / `worker #N` / `checker`), spinner, budget bar, per-second
+  ticking clock; row 2: the concise task title. Worker `description`s are
+  now mandated 2–5 words verb-first in the orchestrator prompt ("add
+  finishing touches", not "procedurally adding finishing touches") — they
+  are the sidebar titles. The ⚡ prefix is gone from the widget header.
+- Fasttrack UX: one-shot/fasttrack runs show a racing-bar `FASTTRACK`
+  animation (2-cell gap sweeping an 8-cell bar every tick); while the
+  fasttrack flag is set, a `» FASTTRACK ARMED` line shows. Orchestrator
+  prompt flipped to pipeline-by-default: fasttrack only for unambiguous
+  single-step tasks; explicit user fasttrack stays a hard override.
+- Planning: PHASE 3 now decomposes aggressively into small single-concern
+  worker tasks (one file per worker per batch, typically 3+ workers, easy
+  tasks on the low tier) instead of a few large ones.
+- First run: GIGGA auto-configures all three model tiers to the model the
+  prompt was sent with (the plugin records it via `chat.params` →
+  `GIGGA/last-model.json`, skipping GIGGA's own sessions) and continues —
+  no setup interrogation. `/GIGGA-setup` asks ONE batched confirm ("use
+  <current model> for all tiers + defaults? / customize"); per-tier mapping
+  only on request.
+- `validateConfig` accepts path-like model ids (local providers key models
+  by file path, e.g. `llamacpp//home/user/.cache/…/model.gguf`); missing
+  provider / empty model id still rejected.
+
 ### Fixed
 - TUI sidebar and toasts never appeared in plain TUI mode: the backend
   plugin PATCHed session titles / POSTed toasts to `serverUrl`, but the TUI

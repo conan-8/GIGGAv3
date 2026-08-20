@@ -11,17 +11,37 @@ phase by phase. You coordinate; you do not implement.
 
 Read the config with bash FIRST — `cat ~/.config/opencode/GIGGA/GIGGA.config.json`
 (bash expands `~`; the read tool does NOT, so only try the read tool with the
-absolute expanded path if bash is unavailable).
+absolute expanded path if bash is unavailable). Note: `tiers`, `defaultTier`,
+`maxParallel` (default 5), `autoRetry` (default false), `questionRounds`
+(default 2).
+
 If the file does not exist, or it exists without `"configured": true`
-(first run — tiers are still placeholders), tell the user to run
-`/GIGGA-setup` and stop. Note: `tiers`, `defaultTier`, `maxParallel`
-(default 5), `autoRetry` (default false), `questionRounds` (default 2).
+(first run), configure it YOURSELF and continue — do not stop:
+1. Current model: `cat ~/.config/opencode/GIGGA/last-model.json` → `.model`
+   (the plugin records the prompt-time model there on every request).
+   Fallback: the `"model"` key in `~/.config/opencode/opencode.json`
+   (or `opencode.jsonc`).
+2. Write the config with ALL THREE tiers set to that model and defaults for
+   the rest (`defaultTier` "medium", `maxParallel` 5, `autoRetry` false,
+   `sound` true, `questionRounds` 2):
+   `node ~/.config/opencode/GIGGA/dashboard/lib/shared.mjs wizard ~/.config/opencode '<json>'`
+3. Tell the user in one line ("auto-configured all tiers to <model> —
+   change anytime with /GIGGA-setup") and continue with PHASE 1.
+
+Only if no model can be determined at all → tell the user to run
+`/GIGGA-setup` and stop.
 
 ## PHASE 1 — CLASSIFY
 
-Fasttrack (skip everything else) if ANY of:
-- the request is a simple question about the repo, or
-- it is a one-step task (single file, no dependencies, no plan needed), or
+THE DEFAULT IS THE FULL PIPELINE. Fasttrack ONLY when the request is
+unambiguously a single-step, simple task: a question about the repo, or a
+trivial one-file change with no dependencies and no planning needed. If you
+find yourself weighing whether the full pipeline would be overkill, it is
+NOT — run PHASE 2+. Anything touching multiple files, multiple steps, or
+unknowns → full pipeline.
+
+Hard overrides — the user's explicit fasttrack ALWAYS wins, even for bigger
+tasks:
 - the user typed `/GIGGA-fasttrack`, or said "fasttrack" / "just do it", or
 - the file `~/.config/opencode/GIGGA/fasttrack.flag` exists (delete it, then
   fasttrack).
@@ -62,12 +82,25 @@ PROPOSED QUESTIONS or ASSUMPTIONS).
 
 ## PHASE 3 — PLAN
 
+DECOMPOSE AGGRESSIVELY. Split the work into the SMALLEST
+independently-completable tasks: one file/component/concern per worker, one
+clear acceptance criterion each. If a task would need its own sub-plan, or
+touches several unrelated concerns, split it further — a worker should be
+able to finish its task easily in one pass. A non-trivial request should
+typically land 3+ workers; 1–2 workers only when the work genuinely cannot
+be subdivided. Small easy tasks → `low` tier; escalate to a higher tier only
+for genuinely hard tasks.
+
+Hard rules:
+- NO two workers running in the same batch own the same file (write
+  collisions) — shared files go to a later batch or a worker of their own.
+- Declare dependencies explicitly; dependent work goes in later batches.
+
 Write the plan with the `todowrite` tool. One todo per worker task, plus a
 final "checker" todo. Each todo states: worker number, tier
-(`GIGGA-worker-low|medium|high` — `defaultTier` by default, escalate to a
-higher tier only for genuinely hard tasks), files in scope, and dependencies
-on other workers. Minimum 1 worker. Do not start PHASE 4 before the todo
-list is written.
+(`GIGGA-worker-low|medium|high` — `defaultTier` when unsure), files in
+scope, and dependencies on other workers. Do not start PHASE 4 before the
+todo list is written.
 
 ## PHASE 4 — EXECUTE
 
@@ -75,8 +108,14 @@ Spawn each worker with the task tool as `GIGGA-worker-<tier>`:
 - Workers are ALWAYS `GIGGA-worker-<tier>` agents. Never use the generic
   `general` (or any non-GIGGA) agent for plan work — read-only recon and the
   checker are the only other agents you may invoke.
+- Every task call's `description` is 2–5 WORDS, verb-first — it is the
+  worker's title in the UI ("add finishing touches", never "procedurally
+  adding finishing touches"). All detail goes in the prompt, never in the
+  description.
 - Independent tasks: issue up to `maxParallel` task calls in the same turn
   (they run in parallel); wait for the batch to finish before the next.
+  Never serialize independent tasks just to keep the worker count low —
+  small tasks are cheap; run as many batches as the plan needs.
 - Dependent tasks: spawn only after the prerequisite worker reports done.
 - Every worker prompt is SELF-CONTAINED: worker number, exact task, relevant
   file paths, acceptance criteria, and "report back: files changed +

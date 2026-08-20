@@ -33,11 +33,15 @@ agent pack via a one-line curl installer.
 - **Phase toasts**: planning / N workers running (M slots free) / checking /
   done / failed-needs-retry.
 - **Setup**: first run detected via missing config or missing
-  `"configured": true`; `/GIGGA-setup` (GIGGA-config agent) and the
-  dashboard config screen share one implementation
-  (`dashboard/lib/shared.mjs`, also a CLI: validate/apply/models/status/
-  wizard). The wizard marks `configured: true`, rewrites agent model lines,
-  and shows a 5-line cheat sheet.
+  `"configured": true`; on first run GIGGA auto-writes the config with all
+  three tiers set to the prompt-time model (recorded by the plugin via
+  `chat.params` → `GIGGA/last-model.json`) and continues; `/GIGGA-setup`
+  (GIGGA-config agent) and the dashboard config screen share one
+  implementation (`dashboard/lib/shared.mjs`, also a CLI:
+  validate/apply/models/status/wizard) and ask a single batched confirm
+  defaulting to the current model for all tiers. The wizard marks
+  `configured: true`, rewrites agent model lines, and shows a 5-line cheat
+  sheet.
 - **GIGGA-config is scope-limited**: bash allows only the shared CLI and
   `opencode models` (wildcard deny first — opencode uses last-match-wins).
 - **/GIGGA-status** command prints phase, agent table, pending-question

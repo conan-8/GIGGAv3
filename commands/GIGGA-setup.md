@@ -4,8 +4,12 @@ agent: GIGGA-config
 subtask: true
 ---
 
-Run the GIGGA setup wizard: discover my available opencode providers and
-models, help me map the low/medium/high tiers, set maxParallel, autoRetry and
-sound, write ~/.config/opencode/GIGGA/GIGGA.config.json, and update the
-`model:` lines in the GIGGA agent files (the worker files carry the
-`<!-- set by GIGGA-config -->` marker).
+Run the GIGGA setup wizard: determine my current model (from
+~/.config/opencode/GIGGA/last-model.json, falling back to the "model" key in
+opencode.json/opencode.jsonc), propose it for ALL tiers (low/medium/high)
+with defaults (defaultTier medium, maxParallel 5, autoRetry off, sound on,
+questionRounds 2), ask me ONE batched confirm (use it for everything /
+customize), then write ~/.config/opencode/GIGGA/GIGGA.config.json and update
+the `model:` lines in the GIGGA agent files (the worker files carry the
+`<!-- set by GIGGA-config -->` marker). Only if I choose "customize", walk
+me through per-tier model picks and the individual settings.

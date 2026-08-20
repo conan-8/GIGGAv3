@@ -77,6 +77,7 @@ interface RunState {
   runStartedAt?: string
   doneAt?: string
   failReason?: string
+  sessions?: Record<string, { agent?: string; parent?: string; createdAt?: string }>
 }
 
 // ------------------------------------------------- renderers (ported) -----
@@ -122,6 +123,14 @@ function budgetBar(a: { tier: Tier }, ms: number): string {
   return "▓".repeat(cells) + "░".repeat(5 - cells)
 }
 
+// Fasttrack/one-shot runs: a 2-cell gap races across a full bar, one cell
+// per tick — visibly accelerated next to the normal bar's slow pulse.
+function fastBar(sec: number): string {
+  const n = 8
+  const gap = sec % n
+  return Array.from({ length: n }, (_, i) => (i === gap || i === (gap + 1) % n ? "░" : "▓")).join("")
+}
+
 const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
 
 // Proper red for the GIGGA brand — theme-independent (theme().error is
@@ -132,6 +141,7 @@ const GIGGA_RED = RGBA.fromInts(255, 51, 51)
 const tui: TuiPlugin = async (api) => {
   const [run, setRun] = createSignal<RunState | null>(null)
   const [tick, setTick] = createSignal(0)
+  const [flagArmed, setFlagArmed] = createSignal(false)
   let lastMtime = 0
 
   const cfgRoot = () => process.env.GIGGA_HOME ?? api.state.path?.config ?? join(homedir(), ".config", "opencode")
@@ -139,6 +149,7 @@ const tui: TuiPlugin = async (api) => {
     const dir = api.state.path?.worktree || api.state.path?.directory
     return dir ? projectStatePath(dir, cfgRoot()) : null
   }
+  const flagFile = () => join(cfgRoot(), "GIGGA", "fasttrack.flag")
   const soundOn = async () => {
     try {
       const cfg = JSON.parse(await readFile(join(cfgRoot(), "GIGGA", "GIGGA.config.json"), "utf8"))
@@ -189,6 +200,10 @@ const tui: TuiPlugin = async (api) => {
   // state file itself is unchanged.
   const timer = setInterval(() => {
     setTick((t) => t + 1)
+    stat(flagFile()).then(
+      () => setFlagArmed(true),
+      () => setFlagArmed(false),
+    )
     const file = stateFile()
     if (!file) return
     stat(file)
@@ -212,15 +227,39 @@ const tui: TuiPlugin = async (api) => {
   api.slots.register({
     order: 100,
     slots: {
-      sidebar_content(_ctx: Readonly<TuiSlotContext>, _props: { session_id: string }) {
+      sidebar_content(_ctx: Readonly<TuiSlotContext>, props: { session_id: string }) {
         const theme = () => api.theme.current
         const sec = () => tick()
-        const visible = () => {
+        // Session scoping: the widget belongs to the session that RUNS it.
+        // Other tabs/sessions in the same project must not show this run.
+        const viewedInRun = () => {
           const s = run()
-          return !!s && (!!s.orchestrator || (s.agents?.length ?? 0) > 0)
+          const id = props.session_id
+          if (!s || !id) return false
+          if (s.orchestrator === id) return true
+          return (s.agents ?? []).some((a) => a.sessionId === id)
         }
+        // A GIGGA session that is not part of the current run and was created
+        // after the run started is FRESH (first state update hasn't landed):
+        // show a placeholder instead of the previous run's leftover tree.
+        const freshGigga = () => {
+          const s = run()
+          const id = props.session_id
+          if (!s || !id || viewedInRun()) return false
+          const info = s.sessions?.[id]
+          if (!info?.agent?.toLowerCase().startsWith("gigga")) return false
+          return (info.createdAt ?? "") > (s.runStartedAt ?? "")
+        }
+        const visible = viewedInRun
         const subagents = () => (run()?.agents ?? []).filter((a) => a.kind !== "orchestrator")
         const dots = () => [...subagents()].sort((x, y) => dotRank(x) - dotRank(y)).slice(0, 10)
+        // A one-shot/fasttrack run: orchestrator active, no subagents, phase
+        // never leaves idle. (A pipeline run only looks like this for the few
+        // seconds before recon spawns — cosmetic, self-corrects.)
+        const fasttracking = () => {
+          const s = run()
+          return !!s && s.phase === "idle" && subagents().length === 0
+        }
         const dotColor = (a: AgentEntry) =>
           a.status === "done"
             ? theme().success
@@ -248,27 +287,45 @@ const tui: TuiPlugin = async (api) => {
               : s.phase === "idle"
                 ? "WORKING"
                 : (PHASE_WORD[s.phase] ?? s.phase.toUpperCase())
-          return `⚡ ${orchBar(s.phase, sec())} ${word}`
+          if (fasttracking()) return `${fastBar(sec())} FASTTRACK`
+          return `${orchBar(s.phase, sec())} ${word}`
         }
         const headerColor = () => {
           const s = run()!
           return s.phase === "failed" ? theme().error : s.phase === "done" ? theme().success : theme().accent
         }
 
+        // Two rows per subagent: row 1 = indicator light, type label, and the
+        // live instruments (spinner / budget bar / ticking clock, or the
+        // frozen ✓/✗ m:ss); row 2 = the concise task title, indented + muted.
         const row = (a: AgentEntry, idx: number, last: boolean) => {
           const conn = last ? "└─" : "├─"
-          const name = a.kind === "worker" ? `#${a.id} ${shortTask(a.task, 16)}` : `${a.kind} ${shortTask(a.task, 14)}`
+          const label = a.kind === "worker" ? `worker #${a.id}` : a.kind
+          const title = shortTask(a.task, 30)
+          // Tree continuation: non-last rows keep the vertical line so the
+          // title row stays visually attached to the tree; the last row's
+          // title is plain-indented under the └─.
+          const titleRow = (
+            <Show when={title !== ""}>
+              <box flexDirection="row" gap={0}>
+                <text fg={theme().textMuted} wrapMode="none">{last ? `     ${title}` : `│    ${title}`}</text>
+              </box>
+            </Show>
+          )
           if (a.status !== "working") {
             const clock = elapsedMs(a)
             const tail =
               `${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}` +
               (a.status === "failed" && (run()?.retries ?? 0) > 0 ? " · retry" : "")
             return (
-              <box flexDirection="row" gap={1}>
-                <text fg={theme().textMuted} wrapMode="none">{conn}</text>
-                <text fg={dotColor(a)} wrapMode="none">●</text>
-                <text fg={theme().textMuted} wrapMode="none">{name}</text>
-                <text fg={dotColor(a)} wrapMode="none">{tail}</text>
+              <box flexDirection="column" gap={0}>
+                <box flexDirection="row" gap={1}>
+                  <text fg={theme().textMuted} wrapMode="none">{conn}</text>
+                  <text fg={dotColor(a)} wrapMode="none">●</text>
+                  <text fg={theme().textMuted} wrapMode="none">{label}</text>
+                  <text fg={dotColor(a)} wrapMode="none">{tail}</text>
+                </box>
+                {titleRow}
               </box>
             )
           }
@@ -287,36 +344,59 @@ const tui: TuiPlugin = async (api) => {
             return ms != null ? fmtClock(ms) : ""
           }
           return (
-            <box flexDirection="row" gap={1}>
-              <text fg={theme().textMuted} wrapMode="none">{conn}</text>
-              <text fg={dotColor(a)} wrapMode="none">●</text>
-              <text fg={theme().text} wrapMode="none">{name}</text>
-              <text fg={theme().warning} wrapMode="none">{spin()}</text>
-              <Show when={bar() !== ""}>
-                <text fg={theme().warning} wrapMode="none">{bar()}</text>
-              </Show>
-              <text fg={theme().warning} wrapMode="none">{clock()}</text>
+            <box flexDirection="column" gap={0}>
+              <box flexDirection="row" gap={1}>
+                <text fg={theme().textMuted} wrapMode="none">{conn}</text>
+                <text fg={dotColor(a)} wrapMode="none">●</text>
+                <text fg={theme().text} wrapMode="none">{label}</text>
+                <text fg={theme().warning} wrapMode="none">{spin()}</text>
+                <Show when={bar() !== ""}>
+                  <text fg={theme().warning} wrapMode="none">{bar()}</text>
+                </Show>
+                <text fg={theme().warning} wrapMode="none">{clock()}</text>
+              </box>
+              {titleRow}
             </box>
           )
         }
 
         return (
-          <Show when={visible()}>
+          <Show when={visible() || freshGigga() || flagArmed()}>
             <box flexDirection="column" paddingTop={0} paddingBottom={0} gap={0}>
-              <box flexDirection="row" gap={1}>
-                <text fg={GIGGA_RED} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
-                <text fg={headerColor()} wrapMode="none">{headerText()}</text>
-              </box>
-              <Show when={dots().length > 0}>
-                <box flexDirection="row" gap={0}>
-                  <For each={dots()}>{(a) => <text fg={dotColor(a)} wrapMode="none">● </text>}</For>
+              <Show when={visible()}>
+                <box flexDirection="column" gap={0}>
+                  <box flexDirection="row" gap={1}>
+                    <text fg={GIGGA_RED} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
+                    <text fg={headerColor()} wrapMode="none">{headerText()}</text>
+                  </box>
+                  <Show when={dots().length > 0}>
+                    <box flexDirection="row" gap={0}>
+                      <For each={dots()}>{(a) => <text fg={dotColor(a)} wrapMode="none">● </text>}</For>
+                    </box>
+                  </Show>
+                  <For each={subagents()}>{(a, i) => row(a, i(), i() === subagents().length - 1)}</For>
+                  <Show when={run()?.pendingQuestion}>
+                    <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
+                      {sec() % 2 ? "▶ waiting for your answer" : "▸ waiting for your answer"}
+                    </text>
+                  </Show>
                 </box>
               </Show>
-              <For each={subagents()}>{(a, i) => row(a, i(), i() === subagents().length - 1)}</For>
-              <Show when={run()?.pendingQuestion}>
-                <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
-                  {sec() % 2 ? "▶ waiting for your answer" : "▸ waiting for your answer"}
-                </text>
+              <Show when={!visible() && freshGigga()}>
+                <box flexDirection="row" gap={1}>
+                  <text fg={GIGGA_RED} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
+                  <text fg={theme().textMuted} wrapMode="none">{"░".repeat(6)} READING</text>
+                </box>
+              </Show>
+              <Show when={flagArmed()}>
+                <box flexDirection="row" gap={1}>
+                  <Show when={!visible() && !freshGigga()}>
+                    <text fg={GIGGA_RED} attributes={TextAttributes.BOLD} wrapMode="none">GIGGA</text>
+                  </Show>
+                  <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
+                    » FASTTRACK ARMED
+                  </text>
+                </box>
               </Show>
             </box>
           </Show>

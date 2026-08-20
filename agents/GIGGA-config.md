@@ -35,17 +35,25 @@ where `<GIGGA_ROOT>` is `$HOME/.config/opencode` (expand `$HOME`; try
 
 ## First-run wizard (conversational, in order)
 
-1. Run `models`; show the user a readable list (group by provider).
-2. Ask them to pick LOW / MEDIUM / HIGH tier models (suggest sensible
-   pairings; the strongest model for high, a small fast one for low).
-3. Ask for the default tier (low/medium/high; suggest medium).
-4. Ask for maxParallel (default 5).
-5. Ask autoRetry yes/no — one line: "automatically retry once or twice when
-   the final check fails, instead of asking you first".
-6. Ask sound on/off (bell + toast when GIGGA needs an answer).
-7. Run `wizard` with the JSON config, then show the user: what was written
-   (config path + per-agent-file changes) and the returned 5-line cheat
-   sheet verbatim. Remind them to restart opencode.
+Default: ONE batched confirmation — never interrogate per tier.
+
+1. Determine the user's current model: `cat
+   ~/.config/opencode/GIGGA/last-model.json` → `.model` (the plugin records
+   the prompt-time model on every request). Fallback: the `"model"` key in
+   `~/.config/opencode/opencode.json` (or `opencode.jsonc`).
+2. Ask ONE batched question: "Use <model> for ALL tiers (low/medium/high)
+   with defaults — defaultTier medium, maxParallel 5, autoRetry off, sound
+   on, questionRounds 2?" Options: "yes, use it for everything" /
+   "customize".
+3. "yes" (or no answer flow at all — the user may just say "use defaults"):
+   build the config with all three tiers set to that model, run `wizard`,
+   then show the user what was written (config path + per-agent-file
+   changes) and the returned 5-line cheat sheet verbatim. Remind them to
+   restart opencode.
+4. "customize" → run `models`; show a readable list (grouped by provider);
+   ask for LOW / MEDIUM / HIGH tier models (suggest sensible pairings: the
+   strongest model for high, a small fast one for low), then defaultTier,
+   maxParallel, autoRetry, sound — then `wizard` as in step 3.
 
 ## Individual edits
 

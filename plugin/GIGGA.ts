@@ -37,6 +37,7 @@ const CFG_ROOT = process.env.GIGGA_HOME ?? join(process.env.HOME ?? "~", ".confi
 const GIGGA_DIR = join(CFG_ROOT, "GIGGA")
 const CONFIG_FILE = join(GIGGA_DIR, "GIGGA.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
+const LAST_MODEL_FILE = join(GIGGA_DIR, "last-model.json")
 const STALE_AFTER_MS = 120_000
 
 // per-project paths — set at plugin init
@@ -79,7 +80,7 @@ interface RunState {
   orchestrator: string | null
   workerCounter: number
   taskCalls: Record<string, { entryIndex: number; asked: boolean }>
-  sessions: Record<string, { agent?: string; parent?: string; firstUserText?: string }>
+  sessions: Record<string, { agent?: string; parent?: string; firstUserText?: string; createdAt?: string }>
   answeredQuestions: Record<string, boolean>
   questionCalls: Record<string, number>
   retries: number
@@ -137,6 +138,21 @@ function readConfig(): any {
   } catch {
     return {}
   }
+}
+
+// The prompt-time model, recorded from chat.params so first-run auto-config
+// and /GIGGA-setup can default all tiers to the model the user is actually
+// using. GIGGA's own sessions are skipped: post-config they run on tier
+// models, which are NOT the user's selection. Model selection in the TUI is
+// global, so the last non-GIGGA selection is effectively the current one.
+let lastRecordedModel = ""
+async function recordLastModel(id: string) {
+  if (!id || id === lastRecordedModel) return
+  lastRecordedModel = id
+  try {
+    await mkdir(GIGGA_DIR, { recursive: true })
+    await writeFile(LAST_MODEL_FILE, JSON.stringify({ model: id, updatedAt: new Date().toISOString() }, null, 2) + "\n")
+  } catch {}
 }
 
 async function readState(): Promise<RunState> {
@@ -571,6 +587,17 @@ export const GiggaPlugin: Plugin = async (input) => {
         await log(`event handler error (${input.event?.type}): ${String(e)}`)
       }
     },
+    async "chat.params"(input) {
+      try {
+        const agent = String(input.agent ?? "")
+        if (agent.toLowerCase().startsWith("gigga")) return
+        const m = input.model
+        const id = m?.providerID && m?.id ? `${m.providerID}/${m.id}` : null
+        if (id) await recordLastModel(id)
+      } catch (e) {
+        await log(`chat.params error: ${String(e)}`)
+      }
+    },
     "tool.execute.before": async (input, output) => {
       try {
         if (input.tool !== "question") return
@@ -602,6 +629,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         const next = { ...cur }
         if (info.agent) next.agent = info.agent
         if (info.parentID) next.parent = info.parentID
+        if (!next.createdAt) next.createdAt = new Date().toISOString()
         if (JSON.stringify(cur) === JSON.stringify(next)) return false
         s.sessions[info.id] = next
         if (next.agent?.toLowerCase().startsWith("GIGGA") && next.parent) {
@@ -635,10 +663,29 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         const cur = s.sessions[sid] ?? {}
         const next = { ...cur }
         if (info.agent) next.agent = info.agent
+        if (!next.createdAt) next.createdAt = new Date().toISOString()
         if (firstUserText && !next.firstUserText) next.firstUserText = firstUserText
         let changed = false
         if (JSON.stringify(cur) !== JSON.stringify(next)) {
           s.sessions[sid] = next
+          changed = true
+        }
+        // New activity in a finished run's session = a fresh run: reset so
+        // the previous run's agents/progress don't carry over into the new
+        // one (sidebar + dashboard). The >3s guard keeps a late-arriving
+        // update of the run's final message from wiping the just-set state.
+        if (
+          sid === s.orchestrator &&
+          (s.phase === "done" || s.phase === "failed") &&
+          s.doneAt &&
+          Date.now() - Date.parse(s.doneAt) > 3000
+        ) {
+          const sessions = s.sessions
+          Object.assign(s, freshState())
+          s.sessions = sessions
+          s.orchestrator = sid
+          s.runStartedAt = new Date().toISOString()
+          bindOrchestrator = true
           changed = true
         }
         if (sid === s.orchestrator && !s.originalRequest && next.firstUserText) {
