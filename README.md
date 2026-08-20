@@ -69,20 +69,21 @@ questions; commands `/GIGGA-setup`, `/GIGGA-fasttrack`, `/GIGGA-retry`,
 `/GIGGA-status`. **The TUI sidebar (`ctrl+x b`) shows a live GIGGA progress
 widget** — a real sidebar view rendered by `plugins/GIGGA-sidebar.tsx`
 through opencode's TUI slot API (registered in `tui.json` by the installer):
-a 6-step phase bar with a pulsing current step (a racing bar during
-fasttrack one-shots, plus a `» FASTTRACK ARMED` line while the fasttrack
-flag is set), one indicator light per subagent (green done · red failed ·
-yellow running · dim spawning), and two rows per subagent — the first with
-its status light, type label (`recon` / `worker #N` / `checker`), braille
-spinner and, for workers, a time-budget bar (elapsed vs tier budget, H 20m ·
-M 10m · L 5m) with a ticking per-second clock; the second with its concise
-task title — freezing to `✓ m:ss` / `✗ m:ss` when it lands. The widget is
-**session-scoped**: it renders only in the tab viewing the GIGGA run's
-session — other tabs/sessions stay clean, and a brand-new GIGGA session
-shows `░░░░░░ READING` until its first update lands (a new prompt in a
-finished run's session starts a fresh run — previous progress never carries
-over). A finished run
-flashes 🎉 and settles to `✓ ▓▓▓▓▓▓ done · 12:30 · 4 workers`. When
+a 6-step phase bar — red while running, green once done — with a flashing
+current step and a ticking total-run clock to its right (a racing bar
+during fasttrack one-shots, plus a `» FASTTRACK ARMED` line while the
+fasttrack flag is set), one indicator light per subagent (green done ·
+red failed · yellow running · dim spawning), and two rows per subagent —
+the first with its status light, type label (`recon` / `worker #N` /
+`checker`), braille spinner and, for workers, a time-budget bar (elapsed
+vs tier budget, H 20m · M 10m · L 5m) with a ticking per-second clock;
+the second with its concise task title — freezing to `✓ m:ss` / `✗ m:ss`
+when it lands. The widget is **session-scoped**: it renders only in the
+tab viewing the GIGGA run's session — other tabs/sessions stay clean, and
+a brand-new GIGGA session shows `░░░░░░ READING` until its first update
+lands (a new prompt in a finished run's session starts a fresh run —
+previous progress never carries over). A finished run flashes 🎉 and
+settles to `✓ ▓▓▓▓▓▓ 12:30 done · 4 workers`. When
 GIGGA asks a question, finishes, or fails, the widget raises an in-TUI
 toast plus opencode's cross-platform attention notification (desktop
 notification + named sound when the terminal is unfocused — tunable via

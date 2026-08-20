@@ -3,11 +3,12 @@
  * GIGGA sidebar — TUI slot plugin (opencode TUI plugin API, verified 1.18.18).
  *
  * Renders the GIGGA run's live progress directly into the TUI sidebar
- * (ctrl+x b): a 6-step phase bar with a pulsing current step, one indicator
- * light per subagent (done / failed / running / spawning), and a tree row
- * per subagent with a braille spinner, time-budget bar and ticking clock for
- * workers, freezing to ✓/✗ m:ss on completion. Also raises an in-TUI toast
- * plus opencode's cross-platform attention notification (desktop
+ * (ctrl+x b): a 6-step phase bar (red while running, green once done) with
+ * a flashing current step and a ticking total-run clock to its right, one
+ * indicator light per subagent (done / failed / running / spawning), and a
+ * tree row per subagent with a braille spinner, time-budget bar and ticking
+ * clock for workers, freezing to ✓/✗ m:ss on completion. Also raises an
+ * in-TUI toast plus opencode's cross-platform attention notification (desktop
  * notification + named sound, user-tunable in tui.json) when GIGGA asks a
  * question, finishes, or fails.
  *
@@ -113,7 +114,8 @@ function orchBar(phase: string, sec: number): string {
   const step = PHASE_STEPS[phase] ?? 0
   if (phase === "done") return "▓".repeat(6)
   if (phase === "failed" || step === 0) return "▓".repeat(step) + "░".repeat(6 - step)
-  return "▓".repeat(step - 1) + (sec % 2 ? "▒" : "▓") + "░".repeat(6 - step)
+  // Current stage flashes on/off (▓ ↔ ░), one flip per tick.
+  return "▓".repeat(step - 1) + (sec % 2 ? "░" : "▓") + "░".repeat(6 - step)
 }
 
 function budgetBar(a: { tier: Tier }, ms: number): string {
@@ -136,6 +138,9 @@ const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").
 // Proper red for the GIGGA brand — theme-independent (theme().error is
 // pinkish in some themes); matches the agent frontmatter color (#ff3333).
 const GIGGA_RED = RGBA.fromInts(255, 51, 51)
+// Theme-independent green for the finished bar (theme().success is not a
+// clean green in every theme) — same family as GIGGA_RED.
+const GIGGA_GREEN = RGBA.fromInts(51, 255, 51)
 
 // ------------------------------------------------------------------ plugin -
 const tui: TuiPlugin = async (api) => {
@@ -269,17 +274,33 @@ const tui: TuiPlugin = async (api) => {
                 ? theme().warning
                 : theme().textMuted
 
+        // Total run time, rendered to the right of the phase bar. Live
+        // (Date.now()) while the run is active — headerText() reads sec()
+        // on those paths, so this re-evaluates every tick — frozen to
+        // doneAt once the run lands on done/failed.
+        const totalClock = () => {
+          const s = run()
+          if (!s?.runStartedAt) return ""
+          const start = Date.parse(s.runStartedAt)
+          if (!isFinite(start)) return ""
+          const end = s.doneAt ? Date.parse(s.doneAt) : Date.now()
+          const d = end - start
+          return isFinite(d) && d >= 0 ? fmtClock(d) : ""
+        }
         const headerText = () => {
           const s = run()!
+          const clock = totalClock()
+          const timed = (bar: string) => (clock ? `${bar} ${clock}` : bar)
           if (s.phase === "failed") {
-            return s.failReason === "interrupted" ? "✗ ▓▓▓▓░░ interrupted" : "✗ ▓▓▓▓░░ failed — /GIGGA-retry"
+            return s.failReason === "interrupted"
+              ? `✗ ${timed("▓▓▓▓░░")} interrupted`
+              : `✗ ${timed("▓▓▓▓░░")} failed — /GIGGA-retry`
           }
           if (s.phase === "done") {
             const ws = s.agents.filter((a) => a.kind === "worker")
-            const dur = s.runStartedAt && s.doneAt ? ` · ${fmtClock(Date.parse(s.doneAt) - Date.parse(s.runStartedAt))}` : ""
             const wn = ws.length ? ` · ${ws.length} worker${ws.length === 1 ? "" : "s"}` : ""
             const flash = !!(s.doneAt && Date.now() - Date.parse(s.doneAt) < 1600)
-            return `${flash ? "🎉" : "✓"} ▓▓▓▓▓▓ done${dur}${wn}`
+            return `${flash ? "🎉" : "✓"} ${timed("▓▓▓▓▓▓")} done${wn}`
           }
           const word =
             s.phase === "questions" && s.pendingQuestion
@@ -287,12 +308,12 @@ const tui: TuiPlugin = async (api) => {
               : s.phase === "idle"
                 ? "WORKING"
                 : (PHASE_WORD[s.phase] ?? s.phase.toUpperCase())
-          if (fasttracking()) return `${fastBar(sec())} FASTTRACK`
-          return `${orchBar(s.phase, sec())} ${word}`
+          if (fasttracking()) return `${timed(fastBar(sec()))} FASTTRACK`
+          return `${timed(orchBar(s.phase, sec()))} ${word}`
         }
         const headerColor = () => {
           const s = run()!
-          return s.phase === "failed" ? theme().error : s.phase === "done" ? theme().success : theme().accent
+          return s.phase === "failed" ? theme().error : s.phase === "done" ? GIGGA_GREEN : GIGGA_RED
         }
 
         // Two rows per subagent: row 1 = indicator light, type label, and the

@@ -5,12 +5,14 @@
 ### Added
 - TUI sidebar widget (`plugins/GIGGA-sidebar.tsx`, registered in
   `~/.config/opencode/tui.json` by the installer): a real sidebar view via
-  opencode's TUI slot API showing the live run — 6-step phase bar with
-  pulsing current step, one colored indicator light per subagent
-  (green done · red failed · yellow running · dim spawning), tree rows with
-  braille spinners, worker time-budget bars + ticking m:ss clocks, ✓/✗
-  finals, 🎉 flash on completion. Driven by a 1s mtime-gated poll of the
-  per-project state.json; hidden when no GIGGA run exists.
+  opencode's TUI slot API showing the live run — 6-step phase bar (red
+  while running, green once done, theme-independent) with a flashing
+  current step and a ticking total-run clock to its right, one colored
+  indicator light per subagent (green done · red failed · yellow running ·
+  dim spawning), tree rows with braille spinners, worker time-budget bars
+  + ticking m:ss clocks, ✓/✗ finals, 🎉 flash on completion. Driven by a
+  1s mtime-gated poll of the per-project state.json; hidden when no GIGGA
+  run exists.
 - Notifications that actually reach the TUI: question-pending / done /
   failed transitions raise an in-TUI toast plus opencode's cross-platform
   attention notification (desktop notification + named sound when the
