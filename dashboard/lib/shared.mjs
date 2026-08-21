@@ -44,22 +44,62 @@ export async function recoverStaleState(state, now = Date.now()) {
   return { state, changed }
 }
 
+// ----------------------------------------------------------- multi-run -----
+// state.json holds ONE RUN PER GIGGA SESSION (concurrent runs never
+// overwrite each other): { updatedAt, sessions, runs: { <orchSessionId>:
+// RunState } }. Legacy single-run files (one flat RunState) are wrapped into
+// a one-entry runs map on read. The sidebar plugin shows each session its
+// own run; the dashboard shows the most relevant one (pickDisplayRun).
+export function normalizeProjectFile(raw) {
+  if (!raw || typeof raw !== "object") return null
+  if (raw.runs && typeof raw.runs === "object") {
+    return { updatedAt: raw.updatedAt, sessions: raw.sessions ?? {}, runs: raw.runs }
+  }
+  if (raw.phase || raw.agents || raw.orchestrator) {
+    const sessions = raw.sessions ?? {}
+    const run = { ...raw }
+    delete run.sessions
+    const orch = typeof raw.orchestrator === "string" && raw.orchestrator ? raw.orchestrator : null
+    run.orchestrator = orch
+    return { updatedAt: raw.updatedAt, sessions, runs: { [orch ?? "legacy"]: run } }
+  }
+  return null
+}
+
+// The run the dashboard/CLI shows: newest ACTIVE run, else newest overall.
+export function pickDisplayRun(pf) {
+  const runs = Object.values(pf?.runs ?? {})
+  if (!runs.length) return null
+  const active = runs.filter((r) => r.phase !== "done" && r.phase !== "failed")
+  const pool = active.length ? active : runs
+  pool.sort((a, b) => Date.parse(b.updatedAt || "0") - Date.parse(a.updatedAt || "0"))
+  return pool[0]
+}
+
 export async function readProjectState(projectDir, cfgRoot) {
   const file = projectStatePath(projectDir, cfgRoot)
-  let state = null
+  let raw = null
   try {
-    state = JSON.parse(await readFile(file, "utf8"))
+    raw = JSON.parse(await readFile(file, "utf8"))
   } catch {
     return null
   }
-  const r = await recoverStaleState(state)
-  if (r.changed) {
+  const pf = normalizeProjectFile(raw)
+  if (!pf) return null
+  let changed = false
+  for (const run of Object.values(pf.runs)) {
+    const r = await recoverStaleState(run)
+    if (r.changed) changed = true
+  }
+  if (changed) {
+    // recovery promotes legacy files to the multi-run shape on write-back
     try {
+      pf.updatedAt = new Date().toISOString()
       await mkdir(dirname(file), { recursive: true })
-      await writeFile(file, JSON.stringify(r.state, null, 2) + "\n")
+      await writeFile(file, JSON.stringify(pf, null, 2) + "\n")
     } catch {}
   }
-  return r.state
+  return pickDisplayRun(pf)
 }
 
 // ------------------------------------------------------------- config ------

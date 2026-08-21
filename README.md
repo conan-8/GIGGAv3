@@ -59,6 +59,10 @@ opencode.json backup).
   `~/.config/opencode/GIGGA/projects/<project>-<hash>/state.json` — multiple
   projects on one machine never collide. Interrupted runs (killed opencode)
   are marked `failed (interrupted)` on the next start.
+- **Multiple concurrent runs**: the state file keeps one run per GIGGA
+  session, so several GIGGA sessions in the same project run side by side
+  without overwriting each other, and the TUI sidebar shows each session its
+  own run when you switch to it.
 - **Self-improvement memory** (per project): the plugin appends one objective
   record per finished run to `history.jsonl` (duration, tier overruns,
   retries, checker rounds); after each full-pipeline run the orchestrator

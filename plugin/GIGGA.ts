@@ -5,7 +5,7 @@ import { basename, dirname, join } from "node:path"
 import { createHash } from "node:crypto"
 
 /**
- * GIGGA plugin — orchestration state tracker (session 4).
+ * GIGGA plugin — orchestration state tracker (session 4, multi-run).
  *
  * Maintains PER-PROJECT state under
  *   <cfgRoot>/GIGGA/projects/<slug>-<hash10>/state.json
@@ -13,6 +13,16 @@ import { createHash } from "node:crypto"
  * project/worktree dir — see projectStatePath, mirrored in
  * dashboard/lib/shared.mjs and plugin/GIGGA-sidebar.tsx with a conformance
  * test in dashboard/test/session4.test.mjs).
+ *
+ * The file holds MULTIPLE concurrent runs keyed by orchestrator session:
+ *   { updatedAt, sessions: { <sid>: {agent, parent, firstUserText, createdAt} },
+ *     runs: { <orchestratorSessionId>: RunState } }
+ * Every event is routed to the run that owns its session, so several GIGGA
+ * sessions running at once never overwrite each other; the sidebar plugin
+ * shows each session its own run. Legacy single-run files are wrapped into
+ * one-entry runs maps on read. Finished runs are kept for RUN_TTL_MS (so
+ * switching back to a done session still shows its tree) and pruned beyond
+ * MAX_RUNS / the TTL.
  *
  * Also: server discovery (server.json), stale-run recovery on load,
  * pending-question signaling (bell + toast), phase-transition toasts, and a
@@ -39,6 +49,10 @@ const CONFIG_FILE = join(GIGGA_DIR, "GIGGA.config.json")
 const SERVER_FILE = join(GIGGA_DIR, "server.json")
 const LAST_MODEL_FILE = join(GIGGA_DIR, "last-model.json")
 const STALE_AFTER_MS = 120_000
+// Finished runs stay in state.json long enough to show their final tree when
+// the user switches back to that session; pruned past the TTL / MAX_RUNS.
+const RUN_TTL_MS = 24 * 3_600_000
+const MAX_RUNS = 20
 
 // per-project paths — set at plugin init
 let STATE_FILE = join(GIGGA_DIR, "state.json")
@@ -80,7 +94,6 @@ interface RunState {
   orchestrator: string | null
   workerCounter: number
   taskCalls: Record<string, { entryIndex: number; asked: boolean }>
-  sessions: Record<string, { agent?: string; parent?: string; firstUserText?: string; createdAt?: string }>
   answeredQuestions: Record<string, boolean>
   questionCalls: Record<string, number>
   retries: number
@@ -90,24 +103,70 @@ interface RunState {
   recordedAt?: string
 }
 
-const freshState = (): RunState => ({
+interface SessionInfo {
+  agent?: string
+  parent?: string
+  firstUserText?: string
+  createdAt?: string
+}
+
+// The on-disk file: a project-wide session registry plus one run per GIGGA
+// orchestrator session (runs are keyed by that session id).
+interface ProjectState {
+  updatedAt: string
+  sessions: Record<string, SessionInfo>
+  runs: Record<string, RunState>
+}
+
+const freshRun = (orchestrator: string | null): RunState => ({
   phase: "idle",
   pendingQuestion: false,
   originalRequest: "",
   agents: [],
   updatedAt: new Date().toISOString(),
-  orchestrator: null,
+  orchestrator,
   workerCounter: 0,
   taskCalls: {},
-  sessions: {},
   answeredQuestions: {},
   questionCalls: {},
   retries: 0,
-  runStartedAt: undefined,
+  runStartedAt: new Date().toISOString(),
   doneAt: undefined,
   failReason: undefined,
   recordedAt: undefined,
 })
+
+const freshProjectState = (): ProjectState => ({
+  updatedAt: new Date().toISOString(),
+  sessions: {},
+  runs: {},
+})
+
+// Accepts the multi-run shape and the legacy single-run shape (sessions ≤4,
+// one flat RunState per file) and normalizes to multi-run.
+function normalizeProjectState(raw: any): ProjectState {
+  if (!raw || typeof raw !== "object") return freshProjectState()
+  if (raw.runs && typeof raw.runs === "object") {
+    return {
+      updatedAt: raw.updatedAt ?? new Date().toISOString(),
+      sessions: raw.sessions ?? {},
+      runs: raw.runs,
+    }
+  }
+  if (raw.phase || raw.agents || raw.orchestrator) {
+    const sessions = raw.sessions ?? {}
+    const run: any = { ...freshRun(null), ...raw }
+    delete run.sessions
+    const orch = typeof raw.orchestrator === "string" && raw.orchestrator ? raw.orchestrator : null
+    run.orchestrator = orch
+    return {
+      updatedAt: raw.updatedAt ?? new Date().toISOString(),
+      sessions,
+      runs: { [orch ?? "legacy"]: run },
+    }
+  }
+  return freshProjectState()
+}
 
 let serverUrl: URL | null = null
 // In plain TUI mode opencode listens on NO port — serverUrl points at the
@@ -157,41 +216,38 @@ async function recordLastModel(id: string) {
   } catch {}
 }
 
-async function readState(): Promise<RunState> {
+async function readState(): Promise<ProjectState> {
   try {
     const raw = JSON.parse(await readFile(STATE_FILE, "utf8"))
-    return { ...freshState(), ...raw }
+    return normalizeProjectState(raw)
   } catch {
-    return freshState()
+    return freshProjectState()
   }
 }
 
-async function writeState(s: RunState) {
-  s.updatedAt = new Date().toISOString()
+function pruneRuns(ps: ProjectState) {
+  const now = Date.now()
+  for (const key of Object.keys(ps.runs)) {
+    const run = ps.runs[key]
+    if (run.phase !== "done" && run.phase !== "failed") continue
+    const t = Date.parse(run.doneAt || run.updatedAt || "0")
+    if (isFinite(t) && now - t > RUN_TTL_MS) delete ps.runs[key]
+  }
+  const keys = Object.keys(ps.runs)
+  if (keys.length <= MAX_RUNS) return
+  // Over cap: drop the oldest TERMINAL runs first (live runs are sacred).
+  const terminal = keys
+    .filter((k) => ps.runs[k].phase === "done" || ps.runs[k].phase === "failed")
+    .sort((a, b) => Date.parse(ps.runs[a].updatedAt || "0") - Date.parse(ps.runs[b].updatedAt || "0"))
+  while (Object.keys(ps.runs).length > MAX_RUNS && terminal.length) delete ps.runs[terminal.shift()!]
+}
+
+async function writeState(ps: ProjectState) {
+  ps.updatedAt = new Date().toISOString()
+  pruneRuns(ps)
   await mkdir(STATE_DIR, { recursive: true })
-  const pub = {
-    phase: s.phase,
-    pendingQuestion: s.pendingQuestion,
-    originalRequest: s.originalRequest,
-    agents: s.agents,
-    updatedAt: s.updatedAt,
-  }
-  const full = {
-    ...pub,
-    orchestrator: s.orchestrator,
-    workerCounter: s.workerCounter,
-    taskCalls: s.taskCalls,
-    sessions: s.sessions,
-    answeredQuestions: s.answeredQuestions,
-    questionCalls: s.questionCalls,
-    retries: s.retries,
-    runStartedAt: s.runStartedAt,
-    doneAt: s.doneAt,
-    failReason: s.failReason,
-    recordedAt: s.recordedAt,
-  }
   const tmp = `${STATE_TMP}.${process.pid}.${Date.now()}${Math.random().toString(36).slice(2, 6)}`
-  await writeFile(tmp, JSON.stringify(full, null, 2) + "\n")
+  await writeFile(tmp, JSON.stringify(ps, null, 2) + "\n")
   await rename(tmp, STATE_FILE)
 }
 
@@ -223,13 +279,22 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function update(mutate: (s: RunState) => boolean): Promise<boolean> {
+async function update(mutate: (ps: ProjectState) => boolean): Promise<boolean> {
   return withLock(async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const s = await readState()
-        if (!mutate(s)) return false
-        await writeState(s)
+        const ps = await readState()
+        const before = new Map(Object.entries(ps.runs).map(([k, r]) => [k, JSON.stringify(r)]))
+        if (!mutate(ps)) return false
+        // Liveness stamp per run (the old single-file code bumped the one
+        // updatedAt on every write): stale recovery keys off it, so only runs
+        // that actually changed are stamped — an orphaned run with working
+        // agents still goes stale and gets recovered.
+        const now = new Date().toISOString()
+        for (const [key, run] of Object.entries(ps.runs)) {
+          if (before.get(key) !== JSON.stringify(run)) run.updatedAt = now
+        }
+        await writeState(ps)
         return true
       } catch (e) {
         if (attempt === 2) {
@@ -306,9 +371,9 @@ const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").
 //   running, and a ticking m:ss clock; frozen as
 //   `✓ m:ss` / `✗ m:ss` when finished. Dots are emoji so they keep their
 //   native red/yellow/green in the plain-text title.
-// A 1s sweep PATCHes all rows in one pass; spinner phase, step pulse and the
-// done-flash derive from wall-clock time, so concurrent plugin instances
-// compute identical titles (no flapping).
+// A 1s sweep PATCHes all rows of every live run in one pass; spinner phase,
+// step pulse and the done-flash derive from wall-clock time, so concurrent
+// plugin instances compute identical titles (no flapping).
 // EXPORT SHAPE (verified opencode 1.18.18, DEVIATIONS #28): the plugin loader
 // calls EVERY module export as a plugin — this file must export exactly one
 // function (`GiggaPlugin`). A non-function export throws "Plugin export is
@@ -385,20 +450,20 @@ function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, se
   return `${conn} 🟡 ${name} ${spin}${ms != null ? ` · ${fmtClock(ms)}` : ""}`
 }
 
-async function renderSidebar(s: RunState, flash = false) {
-  if (!s.orchestrator || !serverUrl) return
+async function renderSidebar(run: RunState, flash = false) {
+  if (!run.orchestrator || !serverUrl) return
   const sec = Math.floor(Date.now() / 1000)
-  const rows = s.agents.filter((a) => a.kind !== "orchestrator" && a.sessionId)
+  const rows = run.agents.filter((a) => a.kind !== "orchestrator" && a.sessionId)
   await Promise.all([
-    patchTitle(s.orchestrator, orchestratorTitle(s, sec, flash)),
-    ...rows.map((a, i) => patchTitle(a.sessionId!, childTitle(s, a, i, i === rows.length - 1, sec))),
+    patchTitle(run.orchestrator, orchestratorTitle(run, sec, flash)),
+    ...rows.map((a, i) => patchTitle(a.sessionId!, childTitle(run, a, i, i === rows.length - 1, sec))),
   ])
 }
 
-// ---- 1s sweep: one batched pass over every row title; PATCHes only rows
-// whose title changed since the last pass; renders finals and stops itself
-// when the run is done/failed (the done state keeps ticking ~1.6s to flash
-// 🎉 before settling to ✓).
+// ---- 1s sweep: one batched pass over every row title of EVERY run; PATCHes
+// only rows whose title changed since the last pass; renders finals and stops
+// itself when no run is live (the done state keeps ticking ~1.6s to flash 🎉
+// before settling to ✓).
 let sweepTimer: ReturnType<typeof setInterval> | null = null
 let lastSweepError = ""
 const lastTitles = new Map<string, string>()
@@ -414,24 +479,31 @@ function stopSweep() {
   lastTitles.clear()
 }
 
-async function sweepTick(pre?: RunState) {
-  const s = pre ?? (await readState())
-  if (!s.orchestrator) return stopSweep()
-  if (s.phase === "failed") {
-    await renderSidebar(s)
-    return stopSweep()
+async function sweepTick(ps?: ProjectState) {
+  const s = ps ?? (await readState())
+  const runs = Object.values(s.runs)
+  if (!runs.length) return stopSweep()
+  let keepAlive = false
+  for (const run of runs) {
+    if (!run.orchestrator) continue
+    if (run.phase === "failed") {
+      await renderSidebar(run)
+      continue
+    }
+    if (run.phase === "done") {
+      const flash = !!(run.doneAt && Date.now() - Date.parse(run.doneAt) < 1600)
+      await renderSidebar(run, flash)
+      if (flash) keepAlive = true
+      continue
+    }
+    keepAlive = true
+    await renderSidebar(run)
   }
-  if (s.phase === "done") {
-    const flash = !!(s.doneAt && Date.now() - Date.parse(s.doneAt) < 1600)
-    await renderSidebar(s, flash)
-    if (!flash) stopSweep()
-    return
-  }
-  await renderSidebar(s)
+  if (!keepAlive) stopSweep()
 }
 
-// Render now and keep the sweep alive while the run is active.
-async function refreshSidebar(s?: RunState) {
+// Render now and keep the sweep alive while any run is active.
+async function refreshSidebar(ps?: ProjectState) {
   if (!serverUrl || !serverReachable) return
   if (!sweepTimer) {
     sweepTimer = setInterval(() => {
@@ -444,54 +516,87 @@ async function refreshSidebar(s?: RunState) {
       })
     }, 1000)
   }
-  await sweepTick(s ?? (await readState()))
+  await sweepTick(ps ?? (await readState()))
 }
 
 function classify(subagentType: string): { kind: Kind; tier: Tier } | null {
-  if (subagentType === "GIGGA-recon") return { kind: "recon", tier: null }
-  if (subagentType === "GIGGA-checker") return { kind: "checker", tier: null }
-  if (subagentType === "GIGGA-fasttrack") return { kind: "fasttrack", tier: null }
-  const m = /^GIGGA-worker-(low|medium|high)$/.exec(subagentType)
+  const t = String(subagentType ?? "").toLowerCase()
+  if (t === "gigga-recon") return { kind: "recon", tier: null }
+  if (t === "gigga-checker") return { kind: "checker", tier: null }
+  if (t === "gigga-fasttrack") return { kind: "fasttrack", tier: null }
+  const m = /^gigga-worker-(low|medium|high)$/.exec(t)
   if (m) return { kind: "worker", tier: m[1] as Tier }
   return null
 }
 
-function isGiggaSession(s: RunState, sessionID: string | undefined): boolean {
+// Agents that can ORCHESTRATE a run: the GIGGA primary agent (any
+// non-subagent name starting with "gigga"). Excludes the spawned subagent
+// types (classify hits) and the scoped setup agent GIGGA-config, whose
+// sessions are not runs.
+function isOrchestratorAgent(agent: string | undefined): boolean {
+  const a = String(agent ?? "").toLowerCase()
+  if (!a.startsWith("gigga")) return false
+  if (a === "gigga-config") return false
+  return classify(a) === null
+}
+
+// Which run (key = orchestrator session id) owns this session? Direct run
+// key, run's orchestrator, one of the run's agent sessions, or — for
+// sub-subagents — transitively via the parent chain in the session registry.
+function runKeyFor(ps: ProjectState, sid: string | null | undefined, seen?: Set<string>): string | null {
+  if (!sid) return null
+  seen ??= new Set()
+  if (seen.has(sid)) return null
+  seen.add(sid)
+  if (ps.runs[sid]) return sid
+  for (const [key, run] of Object.entries(ps.runs)) {
+    if (run.orchestrator === sid) return key
+    if (run.agents.some((a) => a.sessionId === sid)) return key
+  }
+  const parent = ps.sessions[sid]?.parent
+  return parent ? runKeyFor(ps, parent, seen) : null
+}
+
+function isGiggaSession(ps: ProjectState, sessionID: string | undefined): boolean {
   if (!sessionID) return false
-  if (sessionID === s.orchestrator) return true
-  const info = s.sessions[sessionID]
-  if (info?.agent?.toLowerCase().startsWith("GIGGA")) return true
-  if (info?.parent && info.parent === s.orchestrator) return true
-  return false
+  if (runKeyFor(ps, sessionID)) return true
+  return String(ps.sessions[sessionID]?.agent ?? "").toLowerCase().startsWith("gigga")
 }
 
 // ------------------------------------------------------------- recovery ----
 async function recoverStale() {
-  const acted = await update((s) => {
-    const age = Date.now() - Date.parse(s.updatedAt || "0")
-    if (!isFinite(age) || age < STALE_AFTER_MS) return false
+  const recovered: string[] = []
+  const acted = await update((ps) => {
     let changed = false
     const now = new Date().toISOString()
-    for (const a of s.agents) {
-      if (a.status === "working") {
-        a.status = "failed"
-        a.endedAt = now
-        a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
+    for (const [key, run] of Object.entries(ps.runs)) {
+      const age = Date.now() - Date.parse(run.updatedAt || "0")
+      if (!isFinite(age) || age < STALE_AFTER_MS) continue
+      let runChanged = false
+      for (const a of run.agents) {
+        if (a.status === "working") {
+          a.status = "failed"
+          a.endedAt = now
+          a.task = `${a.task} [failed (interrupted)]`.slice(0, 220)
+          runChanged = true
+        }
+      }
+      if (runChanged) {
+        run.phase = "failed"
+        run.failReason = "interrupted"
+        run.doneAt = run.doneAt ?? now
+        run.pendingQuestion = false
+        recovered.push(key)
         changed = true
       }
-    }
-    if (changed) {
-      s.phase = "failed"
-      s.failReason = "interrupted"
-      s.doneAt = s.doneAt ?? now
-      s.pendingQuestion = false
     }
     return changed
   })
   if (acted) {
-    await log("recovered stale run: working agents marked failed (interrupted)")
-    await recordRun(await readState())
-    await refreshSidebar() // renders the ✗ final titles, then the sweep stops itself
+    await log(`recovered stale run(s): ${recovered.join(", ") || "?"} — working agents marked failed (interrupted)`)
+    const ps = await readState()
+    for (const key of recovered) await recordRun(ps, key)
+    await refreshSidebar(ps) // renders the ✗ final titles, then the sweep stops itself
   }
 }
 
@@ -499,8 +604,8 @@ async function recoverStale() {
 // One JSON line per finished run in <project dir>/history.jsonl — objective
 // metrics (durations, tier overruns, retries, checker rounds) the
 // orchestrator reads at session start to plan better over time. Written at
-// the terminal transitions only; state.recordedAt claims the write so
-// duplicate events / multiple plugin instances record exactly once.
+// the terminal transitions only; run.recordedAt claims the write so duplicate
+// events / multiple plugin instances record exactly once.
 const HISTORY_FILE = () => join(STATE_DIR, "history.jsonl")
 
 function buildRunRecord(s: RunState) {
@@ -531,33 +636,38 @@ function buildRunRecord(s: RunState) {
   }
 }
 
-async function recordRun(s: RunState) {
-  if (s.phase !== "done" && s.phase !== "failed") return
-  const rec = buildRunRecord(s)
+async function recordRun(ps: ProjectState, key: string) {
+  const run = ps.runs[key]
+  if (!run || (run.phase !== "done" && run.phase !== "failed")) return
+  const rec = buildRunRecord(run)
   const claimed = await update((st) => {
-    if (st.recordedAt || (st.phase !== "done" && st.phase !== "failed")) return false
-    st.recordedAt = new Date().toISOString()
+    const r = st.runs[key]
+    if (!r || r.recordedAt || (r.phase !== "done" && r.phase !== "failed")) return false
+    r.recordedAt = new Date().toISOString()
     return true
   })
   if (!claimed) return
   try {
     await mkdir(STATE_DIR, { recursive: true })
     await appendFile(HISTORY_FILE(), JSON.stringify(rec) + "\n")
-    await log(`run recorded: ${rec.phase}${rec.failReason ? ` (${rec.failReason})` : ""} ${rec.durationMs ?? "?"}ms agents=${rec.agents.length} retries=${rec.retries}`)
+    await log(`run recorded: ${rec.phase}${rec.failReason ? ` (${rec.failReason})` : ""} ${rec.durationMs ?? "?"}ms agents=${rec.agents.length} retries=${rec.retries} (run ${key})`)
   } catch (e) {
     await log(`run record failed: ${String(e)}`)
   }
 }
 
 // ------------------------------------------------------- phase toasts ------
-let lastAnnouncedPhase: string | null = null
-async function announcePhase(s: RunState) {
-  if (s.phase === lastAnnouncedPhase) return
-  const prev = lastAnnouncedPhase
-  lastAnnouncedPhase = s.phase
-  const workers = s.agents.filter((a) => a.kind === "worker")
-  await refreshSidebar(s)
-  switch (s.phase) {
+// Per-run dedupe (keyed by run key) so concurrent runs announce independently.
+const lastAnnouncedPhase = new Map<string, string>()
+async function announcePhase(key: string) {
+  const run = (await readState()).runs[key]
+  if (!run) return
+  if (lastAnnouncedPhase.get(key) === run.phase) return
+  const prev = lastAnnouncedPhase.get(key) ?? null
+  lastAnnouncedPhase.set(key, run.phase)
+  const workers = run.agents.filter((a) => a.kind === "worker")
+  await refreshSidebar()
+  switch (run.phase) {
     case "recon":
     case "questions":
       break
@@ -651,9 +761,10 @@ export const GiggaPlugin: Plugin = async (input) => {
       try {
         if (input.tool !== "question") return
         const cap = Number(readConfig().questionRounds ?? 2)
-        const s = await readState()
-        if (!isGiggaSession(s, input.sessionID)) return
-        const calls = s.questionCalls[input.sessionID] ?? 0
+        const ps = await readState()
+        if (!isGiggaSession(ps, input.sessionID)) return
+        const key = runKeyFor(ps, input.sessionID)
+        const calls = key ? (ps.runs[key].questionCalls[input.sessionID] ?? 0) : 0
         if (calls >= cap + 1) {
           output.args = { ...(output.args ?? {}), questions: [] }
           await log(`question cap enforced (session ${input.sessionID}: ${calls} calls ≥ cap ${cap}) — question emptied`)
@@ -672,22 +783,29 @@ async function handleEvent(ev: { type: string; properties?: any }) {
   switch (ev.type) {
     case "session.created": {
       const info = p.info ?? {}
+      if (!info.id) return
       let bound = false
-      await update((s) => {
-        const cur = s.sessions[info.id] ?? {}
+      await update((ps) => {
+        const cur = ps.sessions[info.id] ?? {}
         const next = { ...cur }
         if (info.agent) next.agent = info.agent
         if (info.parentID) next.parent = info.parentID
         if (!next.createdAt) next.createdAt = new Date().toISOString()
         if (JSON.stringify(cur) === JSON.stringify(next)) return false
-        s.sessions[info.id] = next
-        if (next.agent?.toLowerCase().startsWith("GIGGA") && next.parent) {
-          const entry = s.agents.find(
-            (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
-          )
-          if (entry) {
-            entry.sessionId = info.id
-            bound = true
+        ps.sessions[info.id] = next
+        // Bind a freshly spawned GIGGA subagent session to the pending agent
+        // entry of ITS run (routed via the parent session).
+        if (next.agent && classify(next.agent) && next.parent) {
+          const key = runKeyFor(ps, next.parent)
+          const run = key ? ps.runs[key] : null
+          if (run) {
+            const entry = run.agents.find(
+              (a) => a.kind === classify(next.agent!)?.kind && a.status === "working" && a.sessionId === null,
+            )
+            if (entry) {
+              entry.sessionId = info.id
+              bound = true
+            }
           }
         }
         return true
@@ -707,67 +825,52 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         if (typeof text === "string" && text.trim()) firstUserText = text.trim().slice(0, 500)
       }
       let orchTitle: string | null = null
-      let bindOrchestrator = false
-      await update((s) => {
-        const cur = s.sessions[sid] ?? {}
+      let bound = false
+      await update((ps) => {
+        const cur = ps.sessions[sid] ?? {}
         const next = { ...cur }
         if (info.agent) next.agent = info.agent
         if (!next.createdAt) next.createdAt = new Date().toISOString()
         if (firstUserText && !next.firstUserText) next.firstUserText = firstUserText
         let changed = false
         if (JSON.stringify(cur) !== JSON.stringify(next)) {
-          s.sessions[sid] = next
+          ps.sessions[sid] = next
           changed = true
         }
-        // New activity in a finished run's session = a fresh run: reset so
-        // the previous run's agents/progress don't carry over into the new
-        // one (sidebar + dashboard). The >3s guard keeps a late-arriving
-        // update of the run's final message from wiping the just-set state.
-        if (
-          sid === s.orchestrator &&
-          (s.phase === "done" || s.phase === "failed") &&
-          s.doneAt &&
-          Date.now() - Date.parse(s.doneAt) > 3000
-        ) {
-          const sessions = s.sessions
-          Object.assign(s, freshState())
-          s.sessions = sessions
-          s.orchestrator = sid
-          s.runStartedAt = new Date().toISOString()
-          bindOrchestrator = true
-          changed = true
-        }
-        if (sid === s.orchestrator && !s.originalRequest && next.firstUserText) {
-          s.originalRequest = next.firstUserText
-          orchTitle = `⚡ GIGGA · ${shortTask(next.firstUserText)}`
-          changed = true
-        }
-        // Bind a GIGGA primary session as the live run on its first activity,
-        // even if it never spawns subagents (one-shot requests) — otherwise
-        // the sidebar shows nothing at all for the whole run. NOTE: on
-        // 1.18.18 message.updated carries no usable parts/role for extracting
-        // the request text (DEVIATIONS #27), so the trigger is the session's
-        // MAPPED agent (populated by session.created), not the message body.
-        const agent = (next.agent ?? cur.agent ?? "").toLowerCase()
-        if (
-          agent.startsWith("gigga") &&
-          s.orchestrator !== sid &&
-          (!s.orchestrator || s.phase === "done" || s.phase === "failed" || s.phase === "idle")
-        ) {
-          const sessions = s.sessions
-          Object.assign(s, freshState())
-          s.sessions = sessions
-          s.orchestrator = sid
-          s.runStartedAt = new Date().toISOString()
-          if (firstUserText) s.originalRequest = firstUserText
-          bindOrchestrator = true
-          changed = true
+        // Each GIGGA primary session owns its own run (multi-run): concurrent
+        // GIGGA sessions never overwrite each other. Subagent sessions
+        // (classify hits) and parented sessions never start runs.
+        if (isOrchestratorAgent(next.agent ?? cur.agent) && !next.parent) {
+          let run = ps.runs[sid]
+          // New activity in a finished run's own session = a fresh run:
+          // replace it in place so this session's sidebar shows the new run,
+          // not the previous one's tree. The >3s guard keeps a late-arriving
+          // update of the run's final message from wiping the just-set state.
+          if (
+            run &&
+            (run.phase === "done" || run.phase === "failed") &&
+            run.doneAt &&
+            Date.now() - Date.parse(run.doneAt) > 3000
+          ) {
+            run = null as any
+          }
+          if (!run) {
+            run = ps.runs[sid] = freshRun(sid)
+            lastAnnouncedPhase.delete(sid)
+            bound = true
+            changed = true
+          }
+          if (!run.originalRequest && (firstUserText ?? next.firstUserText)) {
+            run.originalRequest = (firstUserText ?? next.firstUserText)!
+            orchTitle = `⚡ GIGGA · ${shortTask(run.originalRequest)}`
+            changed = true
+          }
         }
         return changed
       })
       if (orchTitle) await setTitle(sid, orchTitle)
-      if (bindOrchestrator) {
-        await log(`orchestrator bound: ${sid} (agent=${(await readState()).sessions[sid]?.agent ?? "?"})`)
+      if (bound) {
+        await log(`run started: ${sid} (agent=${(await readState()).sessions[sid]?.agent ?? "?"})`)
         await refreshSidebar() // starts the sweep — ⚡ row goes live immediately
       }
       return
@@ -775,13 +878,23 @@ async function handleEvent(ev: { type: string; properties?: any }) {
 
     case "question.asked": {
       const rid = p.id as string
-      const acted = await update((s) => {
-        if (!isGiggaSession(s, p.sessionID)) return false
-        if (s.answeredQuestions[rid]) return false
-        s.answeredQuestions[rid] = true
-        s.questionCalls[p.sessionID] = (s.questionCalls[p.sessionID] ?? 0) + 1
-        s.pendingQuestion = true
-        if (["idle", "recon", "plan"].includes(s.phase)) s.phase = "questions"
+      const acted = await update((ps) => {
+        if (!isGiggaSession(ps, p.sessionID)) return false
+        let key = runKeyFor(ps, p.sessionID)
+        if (!key) {
+          // A GIGGA primary session asking before its first message.updated
+          // landed: start its run here so the pending flag has a home.
+          const info = ps.sessions[p.sessionID]
+          if (info?.parent || !isOrchestratorAgent(info?.agent)) return false
+          ps.runs[p.sessionID] = freshRun(p.sessionID)
+          key = p.sessionID
+        }
+        const run = ps.runs[key]
+        if (run.answeredQuestions[rid]) return false
+        run.answeredQuestions[rid] = true
+        run.questionCalls[p.sessionID] = (run.questionCalls[p.sessionID] ?? 0) + 1
+        run.pendingQuestion = true
+        if (["idle", "recon", "plan"].includes(run.phase)) run.phase = "questions"
         return true
       })
       if (!acted) return
@@ -795,10 +908,20 @@ async function handleEvent(ev: { type: string; properties?: any }) {
 
     case "question.replied":
     case "question.rejected": {
-      const acted = await update((s) => {
-        if (!s.pendingQuestion) return false
-        s.pendingQuestion = false
-        return true
+      const acted = await update((ps) => {
+        const key = p.sessionID ? runKeyFor(ps, p.sessionID) : null
+        // Routed to the asking session's run; when unroutable, fall back to
+        // clearing every run (legacy global behavior).
+        const keys = key ? [key] : Object.keys(ps.runs)
+        let changed = false
+        for (const k of keys) {
+          const run = ps.runs[k]
+          if (run?.pendingQuestion) {
+            run.pendingQuestion = false
+            changed = true
+          }
+        }
+        return changed
       })
       if (acted) await log(`${ev.type} [${p.requestID ?? ""}]`)
       return
@@ -808,13 +931,18 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       const part = p.part
       if (part?.type !== "tool") return
       if (part.tool === "todowrite") {
-        const acted = await update((s) => {
-          if (p.sessionID !== s.orchestrator) return false
-          if (!["recon", "questions", "idle"].includes(s.phase)) return false
-          s.phase = "plan"
+        let key: string | null = null
+        const acted = await update((ps) => {
+          const k = runKeyFor(ps, p.sessionID)
+          if (!k) return false
+          const run = ps.runs[k]
+          if (run.orchestrator !== p.sessionID) return false
+          if (!["recon", "questions", "idle"].includes(run.phase)) return false
+          run.phase = "plan"
+          key = k
           return true
         })
-        if (acted) await announcePhase(await readState())
+        if (acted && key) await announcePhase(key)
         return
       }
       if (part.tool !== "task") return
@@ -826,26 +954,16 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       const callID = part.callID
 
       if (st.status === "running") {
-        const acted = await update((s) => {
-          if (s.taskCalls[callID]) return false
-          const task = String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200)
-          const dup = s.agents.some(
-            (a) =>
-              a.kind === cls.kind &&
-              a.parentSessionId === p.sessionID &&
-              a.task.slice(0, 60) === task.slice(0, 60),
-          )
-          if (dup) {
-            s.taskCalls[callID] = { entryIndex: -1, asked: true }
-            return false
-          }
-          const parent = p.sessionID
-          if (s.orchestrator !== parent) {
-            const fresh = freshState()
-            Object.assign(s, fresh)
-            s.orchestrator = parent
-            s.runStartedAt = new Date().toISOString()
-            s.agents.push({
+        let key: string | null = null
+        const acted = await update((ps) => {
+          const parent = String(p.sessionID ?? "")
+          let k = parent ? runKeyFor(ps, parent) : null
+          if (!k) {
+            // First signal of a run: a task spawn from an untracked session
+            // starts its own run (no more stealing another run's state).
+            if (!parent) return false
+            const fresh = freshRun(parent)
+            fresh.agents.push({
               id: 0,
               kind: "orchestrator",
               tier: null,
@@ -854,39 +972,57 @@ async function handleEvent(ev: { type: string; properties?: any }) {
               sessionId: parent,
               parentSessionId: "",
             })
+            ps.runs[parent] = fresh
+            k = parent
+          }
+          const run = ps.runs[k]
+          if (run.taskCalls[callID]) return false
+          const task = String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200)
+          const dup = run.agents.some(
+            (a) =>
+              a.kind === cls.kind &&
+              a.parentSessionId === parent &&
+              a.task.slice(0, 60) === task.slice(0, 60),
+          )
+          if (dup) {
+            run.taskCalls[callID] = { entryIndex: -1, asked: true }
+            return false
           }
           const entry: AgentEntry = {
-            id: cls.kind === "worker" ? ++s.workerCounter : 0,
+            id: cls.kind === "worker" ? ++run.workerCounter : 0,
             kind: cls.kind,
             tier: cls.tier,
-            task: String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200),
+            task,
             status: "working",
             sessionId: null,
-            parentSessionId: s.orchestrator!,
+            parentSessionId: parent,
             startedAt: new Date().toISOString(),
           }
-          s.agents.push(entry)
-          s.taskCalls[callID] = { entryIndex: s.agents.length - 1, asked: true }
-          if (cls.kind === "recon") s.phase = "recon"
-          else if (cls.kind === "worker") s.phase = "executing"
-          else if (cls.kind === "checker") s.phase = "checking"
+          run.agents.push(entry)
+          run.taskCalls[callID] = { entryIndex: run.agents.length - 1, asked: true }
+          if (cls.kind === "recon") run.phase = "recon"
+          else if (cls.kind === "worker") run.phase = "executing"
+          else if (cls.kind === "checker") run.phase = "checking"
+          key = k
           return true
         })
-        if (acted) {
-          await log(`task running [${callID}] ${subagentType} "${String(st.input?.description ?? "").slice(0, 60)}"`)
-          const s2 = await readState()
-          await refreshSidebar(s2) // explicit: announcePhase skips repeats across runs
-          await announcePhase(s2)
+        if (acted && key) {
+          await log(`task running [${callID}] ${subagentType} "${String(st.input?.description ?? "").slice(0, 60)}" (run ${key})`)
+          await refreshSidebar() // explicit: announcePhase skips repeats across runs
+          await announcePhase(key)
         }
         return
       }
 
       if (st.status === "completed" || st.status === "error") {
         const m = /<task id="(ses_[A-Za-z0-9]+)"/.exec(String(st.output ?? ""))
-        const acted = await update((s) => {
-          const ref = s.taskCalls[callID]
+        const acted = await update((ps) => {
+          const key = runKeyFor(ps, p.sessionID)
+          if (!key) return false
+          const run = ps.runs[key]
+          const ref = run.taskCalls[callID]
           if (!ref) return false
-          const entry = s.agents[ref.entryIndex]
+          const entry = run.agents[ref.entryIndex]
           if (!entry || entry.status !== "working") return false
           if (m) entry.sessionId = m[1]
           entry.status = st.status === "error" ? "failed" : "done"
@@ -903,17 +1039,22 @@ async function handleEvent(ev: { type: string; properties?: any }) {
 
     case "session.idle": {
       const sid = p.sessionID
-      const acted = await update((s) => {
+      let orchKey: string | null = null
+      const acted = await update((ps) => {
+        const key = runKeyFor(ps, sid)
+        if (!key) return false
+        const run = ps.runs[key]
         const now = new Date().toISOString()
-        if (sid === s.orchestrator) {
+        if (run.orchestrator === sid) {
           let changed = false
-          for (const a of s.agents) if (a.status === "working") { a.status = "done"; a.endedAt = now; changed = true }
-          if (s.pendingQuestion) { s.pendingQuestion = false; changed = true }
-          if (s.phase !== "done") { s.phase = "done"; s.doneAt = now; changed = true }
-          else if (!s.doneAt) { s.doneAt = now; changed = true }
+          for (const a of run.agents) if (a.status === "working") { a.status = "done"; a.endedAt = now; changed = true }
+          if (run.pendingQuestion) { run.pendingQuestion = false; changed = true }
+          if (run.phase !== "done") { run.phase = "done"; run.doneAt = now; changed = true }
+          else if (!run.doneAt) { run.doneAt = now; changed = true }
+          if (changed) orchKey = key
           return changed
         }
-        const entry = s.agents.find((a) => a.sessionId === sid && a.status === "working")
+        const entry = run.agents.find((a) => a.sessionId === sid && a.status === "working")
         if (!entry) return false
         entry.status = "done"
         entry.endedAt = entry.endedAt ?? now
@@ -921,29 +1062,32 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       })
       if (acted) {
         await log(`session.idle ${sid}`)
-        const s2 = await readState()
-        if (sid === s2.orchestrator) {
-          await recordRun(s2)
-          await announcePhase(s2) // "done" toast; sweep flashes 🎉 then settles ✓
-        } else await refreshSidebar(s2)
+        if (orchKey) {
+          await recordRun(await readState(), orchKey)
+          await announcePhase(orchKey) // "done" toast; sweep flashes 🎉 then settles ✓
+        } else await refreshSidebar()
       }
       return
     }
 
     case "session.error": {
       if (p.sessionID == null) return
-      const acted = await update((s) => {
-        if (p.sessionID !== s.orchestrator || s.phase === "failed") return false
-        s.phase = "failed"
-        s.failReason = "error"
-        s.doneAt = s.doneAt ?? new Date().toISOString()
+      let failedKey: string | null = null
+      const acted = await update((ps) => {
+        const key = runKeyFor(ps, p.sessionID)
+        if (!key) return false
+        const run = ps.runs[key]
+        if (run.orchestrator !== p.sessionID || run.phase === "failed") return false
+        run.phase = "failed"
+        run.failReason = "error"
+        run.doneAt = run.doneAt ?? new Date().toISOString()
+        failedKey = key
         return true
       })
-      if (acted) {
+      if (acted && failedKey) {
         await log(`orchestrator session error: ${JSON.stringify(p).slice(0, 200)}`)
-        const s2 = await readState()
-        await recordRun(s2)
-        await announcePhase(s2) // error toast + ✗ final titles
+        await recordRun(await readState(), failedKey)
+        await announcePhase(failedKey) // error toast + ✗ final titles
       }
       return
     }

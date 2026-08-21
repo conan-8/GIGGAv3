@@ -291,13 +291,15 @@ done
 SRVPID=$(pgrep -f "opencode serve --port $PORT" | head -1)
 kill -9 "$SRVPID" 2>/dev/null; sleep 2
 md "state.json valid JSON after kill -9:"
-python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("VALID — phase:", d["phase"], "agents:", [(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E2STATE" && echo "yes" || echo "CORRUPT"
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print("VALID — phase:", d["phase"], "agents:", [(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E2STATE" && echo "yes" || echo "CORRUPT"
 # backdate updatedAt to beyond the 120s stale threshold, restart, trigger plugin load
 python3 - "$E2STATE" <<'PY'
 import json, sys, datetime
 p = sys.argv[1]
 d = json.load(open(p))
 d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).isoformat() + "Z"
+for _r in (d.get("runs") or {}).values():
+    _r["updatedAt"] = d["updatedAt"]
 json.dump(d, open(p, "w"), indent=2)
 PY
 bash "$REPO/test/stop_servers.sh" "$PORT" >/dev/null 2>&1; sleep 1
@@ -306,8 +308,10 @@ PROBE=$(sess_new "$FX" GIGGA-fasttrack)   # session creation loads the plugin
 curl -s -X POST "$BASE/session/$PROBE/prompt_async" -H 'content-type: application/json' \
   -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Reply with just: ok"}]}' -o /dev/null
 sleep 15
-md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"],a["status"],a["task"][-30:]) for a in d["agents"]])' "$E2STATE")"
-if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2STATE"; then
+md "state after recovery:"; code "$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1]))
+for k,r in (j.get("runs") or {}).items():
+    print("run",k[-8:],"phase:",r.get("phase")); print([(a.get("kind"),a.get("status"),str(a.get("task",""))[-30:]) for a in r.get("agents",[])])' "$E2STATE")"
+if python3 -c 'import json,sys; j=json.load(open(sys.argv[1])); runs=list((j.get("runs") or {}).values()); sys.exit(0 if any(r.get("phase")=="failed" and any("interrupted" in a.get("task","") for a in r.get("agents",[])) for r in runs) else 1)' "$E2STATE"; then
   md "**E2: PASS** — no corruption; stale workers marked failed (interrupted)"
 else
   md "**E2: CHECK** — see state above"
@@ -370,8 +374,8 @@ sleep 60; kill %1 %2 2>/dev/null
 S1=$(pstate "$FX"); S2=$(pstate "$FX2")
 md "state files:"; code "$S1
 $S2"
-md "fx1 state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"]) for a in d["agents"]])' "$S1" 2>/dev/null || echo none)"
-md "fx2 state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"]) for a in d["agents"]])' "$S2" 2>/dev/null || echo none)"
+md "fx1 state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"]) for a in d["agents"]])' "$S1" 2>/dev/null || echo none)"
+md "fx2 state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"]) for a in d["agents"]])' "$S2" 2>/dev/null || echo none)"
 if [ "$S1" != "$S2" ] && [ -f "$S1" ] && [ -f "$S2" ]; then md "**E5: PASS** — separate per-project state files"; else md "**E5: CHECK**"; fi
 # dashboard per-project
 GIGGA_HOME="$H/.config/opencode" GIGGA_DATA_DIR="$H/.local/share/opencode" GIGGA_PROJECT_DIR="$FX" \
@@ -409,9 +413,9 @@ curl -s -X POST "$BASE/session/$E7_SID/prompt_async" -H 'content-type: applicati
   -d '{"agent":"GIGGA","parts":[{"type":"text","text":"Add an average(list) function to src/calc.ts."}]}' -o /dev/null
 watch "$E7_SID" 360 first >/dev/null
 E7STATE=$(pstate "$FX")
-md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7STATE" 2>/dev/null)"
+md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7STATE" 2>/dev/null)"
 md "final:"; code "$(final_text "$E7_SID")"
-if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any(a["kind"]=="worker" and a["status"] in ("failed","done") for a in d["agents"]) and ("blocked" in open(sys.argv[1]).read().lower() or "fail" in open(sys.argv[1]).read().lower()) else 1)' "$E7STATE" 2>/dev/null || final_text "$E7_SID" | grep -qi "blocked\|fail"; then
+if python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; sys.exit(0 if any(a["kind"]=="worker" and a["status"] in ("failed","done") for a in d["agents"]) and ("blocked" in open(sys.argv[1]).read().lower() or "fail" in open(sys.argv[1]).read().lower()) else 1)' "$E7STATE" 2>/dev/null || final_text "$E7_SID" | grep -qi "blocked\|fail"; then
   md "**E7: PASS** — failure surfaced to the orchestrator/user"
 else
   md "**E7: CHECK** — see state/final"

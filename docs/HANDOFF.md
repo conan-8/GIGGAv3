@@ -23,7 +23,10 @@ lib/shared.mjs   ← THE config implementation (validate/apply/models/status/
 
 Run state: `~/.config/opencode/GIGGA/projects/<slug>-<hash10>/state.json`
 (project dir keyed; plugin and dashboard compute the path identically —
-parity unit test enforces it). Config:
+parity unit test enforces it). Multi-run: the file holds ONE RUN PER GIGGA
+SESSION (`{ updatedAt, sessions, runs: { <orchSessionId>: RunState } }`), so
+concurrent runs don't collide and the sidebar shows each session its own run;
+readers wrap the legacy flat single-run shape. Config:
 `~/.config/opencode/GIGGA/GIGGA.config.json` (+ `configured` first-run gate,
 `fasttrack.flag` escape hatch, `server.json` discovery).
 

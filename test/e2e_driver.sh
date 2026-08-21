@@ -202,6 +202,7 @@ run_and_watch() {
 import json
 try: s = json.load(open(sys.argv[1]))
 except Exception: raise SystemExit
+s=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(s["runs"]) if isinstance(s.get("runs"),dict) and s["runs"] else s
 print(sum(1 for a in s.get("agents", []) if a.get("kind") == "worker" and a.get("status") == "working"))
 ' "$(state_file)" 2>/dev/null || echo 0)
       case "$C" in ''|*[!0-9]*) C=0;; esac

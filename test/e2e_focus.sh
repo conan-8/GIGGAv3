@@ -172,7 +172,7 @@ for _ in $(seq 1 120); do
   grep -q '"phase": *"executing"' "$E2S" 2>/dev/null && break
   sleep 2
 done
-md "state at kill time:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:",d["phase"],[(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E2S" 2>/dev/null)"
+md "state at kill time:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print("phase:",d["phase"],[(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E2S" 2>/dev/null)"
 kill -9 "$(pgrep -f "opencode serve --port $PORT" | head -1)" 2>/dev/null; sleep 2
 if [ -f "$E2S" ]; then
   if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$E2S" 2>/dev/null; then
@@ -187,14 +187,18 @@ python3 - "$E2S" <<'PY'
 import json, sys, datetime
 d = json.load(open(sys.argv[1]))
 d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).isoformat() + "Z"
+for _r in (d.get("runs") or {}).values():
+    _r["updatedAt"] = d["updatedAt"]
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start_server "$P1" "$FX"
 PROBE=$(sess_new "$FX" GIGGA)
 ask "$PROBE" GIGGA "Reply with just: ok" >/dev/null
 sleep 20
-md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"], a["status"], a["task"][-28:]) for a in d["agents"]])' "$E2S")"
-if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$E2S"; then
+md "state after recovery:"; code "$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1]))
+for k,r in (j.get("runs") or {}).items():
+    print("run",k[-8:],"phase:",r.get("phase")); print([(a.get("kind"),a.get("status"),str(a.get("task",""))[-28:]) for a in r.get("agents",[])])' "$E2S")"
+if python3 -c 'import json,sys; j=json.load(open(sys.argv[1])); runs=list((j.get("runs") or {}).values()); sys.exit(0 if any(r.get("phase")=="failed" and any("interrupted" in a.get("task","") for a in r.get("agents",[])) for r in runs) else 1)' "$E2S"; then
   md "**E2: PASS**"
 else
   md "**E2: CHECK**"
@@ -221,8 +225,8 @@ stop_all
 S1=$(pstate "$FX"); S2=$(pstate "$FX2")
 md "state files:"; code "$S1
 $S2"
-md "fx1 agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"]) for a in d["agents"]])' "$S1" 2>/dev/null || echo none)"
-md "fx2 agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"]) for a in d["agents"]])' "$S2" 2>/dev/null || echo none)"
+md "fx1 agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"]) for a in d["agents"]])' "$S1" 2>/dev/null || echo none)"
+md "fx2 agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"]) for a in d["agents"]])' "$S2" 2>/dev/null || echo none)"
 GIGGA_HOME="$H/.config/opencode" GIGGA_DATA_DIR="$H/.local/share/opencode" GIGGA_PROJECT_DIR="$FX" \
   node "$REPO/dashboard/server.mjs" --port 4483 --no-open > /dev/null 2>&1 &
 GIGGA_HOME="$H/.config/opencode" GIGGA_DATA_DIR="$H/.local/share/opencode" GIGGA_PROJECT_DIR="$FX2" \
@@ -232,8 +236,8 @@ md "dashboard A: $(curl -s http://127.0.0.1:4483/api/state | python3 -c 'import 
 md "dashboard B: $(curl -s http://127.0.0.1:4484/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); print("project:", d.get("project"), "| agents:", len(d["state"]["agents"]) if d["state"] else 0)')"
 bash "$REPO/test/stop_servers.sh" 4483 4484 >/dev/null 2>&1
 if [ -f "$S1" ] && [ -f "$S2" ] && [ "$S1" != "$S2" ] \
-   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["agents"] else 1)' "$S1" \
-   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["agents"] else 1)' "$S2"; then
+   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; sys.exit(0 if d["agents"] else 1)' "$S1" \
+   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; sys.exit(0 if d["agents"] else 1)' "$S2"; then
   md "**E5: PASS** — separate state files, each with its own agents"
 else
   md "**E5: CHECK**"
@@ -252,11 +256,11 @@ ask "$E7" GIGGA "Add an average(list) function to src/calc.ts." >/dev/null
 watch "$E7" 420 first >/dev/null
 E7S=$(pstate "$FX")
 E7_MISSING=0; [ -f "$E7S" ] || E7_MISSING=1
-md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7S" 2>/dev/null)"
+md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$E7S" 2>/dev/null)"
 md "final:"; code "$(final_text "$E7")"
 if [ "$E7_MISSING" = 1 ]; then
   md "**E7: CHECK** — no state file (see transcript)"
-elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any(a["kind"]=="worker" for a in d["agents"]) else 1)' "$E7S" 2>/dev/null && final_text "$E7" | grep -qi "blocked\|fail\|could not"; then
+elif python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; sys.exit(0 if any(a["kind"]=="worker" for a in d["agents"]) else 1)' "$E7S" 2>/dev/null && final_text "$E7" | grep -qi "blocked\|fail\|could not"; then
   md "**E7: PASS** — worker failure surfaced"
 else
   md "**E7: CHECK**"

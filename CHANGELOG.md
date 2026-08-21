@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- Multiple concurrent GIGGA runs per project: state.json now holds one run
+  per GIGGA session (`{ updatedAt, sessions, runs: { <orchSessionId>:
+  RunState } }`) instead of a single run. Concurrent GIGGA sessions in the
+  same project no longer overwrite each other's state, and the TUI sidebar
+  shows each session its own run when you switch to it (backend routes every
+  event to the run that owns its session; finished runs are kept 24 h / max
+  20 so switching back still shows their final tree). Legacy single-run
+  files are migrated on read; the dashboard shows the newest active run.
 - TUI sidebar widget (`plugins/GIGGA-sidebar.tsx`, registered in
   `~/.config/opencode/tui.json` by the installer): a real sidebar view via
   opencode's TUI slot API showing the live run — 6-step phase bar (red

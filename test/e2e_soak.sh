@@ -102,6 +102,7 @@ while :; do
 import json, sys
 try: d = json.load(open(sys.argv[1]))
 except Exception: print(0, "invalid"); raise SystemExit
+d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d
 w = [a for a in d.get("agents", []) if a.get("kind") == "worker" and a.get("status") == "working"]
 print(len(w), d.get("phase", "?"))
 ' "$ST" 2>/dev/null || echo "0 ?")"
@@ -114,8 +115,8 @@ print(len(w), d.get("phase", "?"))
   [ "$POLLS" -gt 400 ] && { md "TIMEOUT"; break; }
   sleep 2
 done
-WORKERS=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for a in d["agents"] if a["kind"]=="worker"))' "$ST" 2>/dev/null)
-DONE=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for a in d["agents"] if a["kind"]=="worker" and a["status"]=="done"))' "$ST" 2>/dev/null)
+WORKERS=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print(sum(1 for a in d["agents"] if a["kind"]=="worker"))' "$ST" 2>/dev/null)
+DONE=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print(sum(1 for a in d["agents"] if a["kind"]=="worker" and a["status"]=="done"))' "$ST" 2>/dev/null)
 md "validation loop: $POLLS polls, corrupt reads: $BADJSON (must be 0)"
 md "phases seen:$PHASES"
 md "max concurrent workers: $MAXCONC (must be ≤ 5)"
@@ -142,6 +143,8 @@ python3 - "$ST" <<'PY'
 import json, sys, datetime
 d = json.load(open(sys.argv[1]))
 d["updatedAt"] = (datetime.datetime.utcnow() - datetime.timedelta(minutes=3)).isoformat() + "Z"
+for _r in (d.get("runs") or {}).values():
+    _r["updatedAt"] = d["updatedAt"]
 json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
 start
@@ -160,8 +163,10 @@ print("phase:", s.get("phase"))
 for a in s.get("agents", []):
     print(" ", a.get("kind"), a.get("id"), a.get("status"), str(a.get("task", ""))[-40:])
 ')"
-md "state after recovery:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("phase:", d["phase"]); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$ST")"
-if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["phase"]=="failed" and any("interrupted" in a.get("task","") for a in d["agents"]) else 1)' "$ST"; then
+md "state after recovery:"; code "$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1]))
+for k,r in (j.get("runs") or {}).items():
+    print("run",k[-8:],"phase:",r.get("phase")); print([(a.get("kind"),a.get("id"),a.get("status")) for a in r.get("agents",[])])' "$ST")"
+if python3 -c 'import json,sys; j=json.load(open(sys.argv[1])); runs=list((j.get("runs") or {}).values()); sys.exit(0 if any(r.get("phase")=="failed" and any("interrupted" in a.get("task","") for a in r.get("agents",[])) for r in runs) else 1)' "$ST"; then
   md "**SOAK-PHASE-2: PASS** — stale run recovered, dashboard shows the failure honestly"
 else
   md "**SOAK-PHASE-2: CHECK**"

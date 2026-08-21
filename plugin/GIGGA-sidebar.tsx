@@ -22,6 +22,13 @@
  * a conformance test in dashboard/test/session4.test.mjs asserts the three
  * copies stay identical).
  *
+ * Multi-run: the state file holds ONE RUN PER GIGGA SESSION
+ * ({ sessions, runs: { <orchestratorSessionId>: RunState } }). The widget
+ * shows the run that belongs to the session currently viewed — switching
+ * sessions switches the sidebar to that session's run, so several GIGGA
+ * sessions running at once each get their own sidebar. Legacy single-run
+ * files are wrapped on read.
+ *
  * Registered via ~/.config/opencode/tui.json ("plugin" array) by install.sh.
  * Read-only: never writes state; all fs access is defensive.
  */
@@ -43,8 +50,9 @@ function projectStatePath(projectDir: string, cfgRoot: string): string {
 }
 
 // ------------------------------------------------------------ state shape --
-// Mirrors RunState in plugin/GIGGA.ts (the on-disk file is the FULL state,
-// including runStartedAt/doneAt/failReason).
+// Mirrors RunState/ProjectState in plugin/GIGGA.ts (the on-disk file is the
+// FULL state: a project-wide session registry plus one run per orchestrator
+// session).
 type Phase =
   | "idle"
   | "recon"
@@ -78,7 +86,25 @@ interface RunState {
   runStartedAt?: string
   doneAt?: string
   failReason?: string
-  sessions?: Record<string, { agent?: string; parent?: string; createdAt?: string }>
+}
+
+interface ProjectFile {
+  sessions: Record<string, { agent?: string; parent?: string; createdAt?: string }>
+  runs: Record<string, RunState>
+}
+
+// Accepts the multi-run shape and the legacy single-run shape (one flat
+// RunState per file) and normalizes to multi-run.
+function normalizeProjectFile(raw: any): ProjectFile | null {
+  if (!raw || typeof raw !== "object") return null
+  if (raw.runs && typeof raw.runs === "object") {
+    return { sessions: raw.sessions ?? {}, runs: raw.runs }
+  }
+  if (raw.phase || raw.agents) {
+    const orch = typeof raw.orchestrator === "string" && raw.orchestrator ? raw.orchestrator : null
+    return { sessions: raw.sessions ?? {}, runs: { [orch ?? "legacy"]: raw } }
+  }
+  return null
 }
 
 // ------------------------------------------------- renderers (ported) -----
@@ -136,7 +162,7 @@ const GIGGA_GREEN = RGBA.fromInts(51, 255, 51)
 
 // ------------------------------------------------------------------ plugin -
 const tui: TuiPlugin = async (api) => {
-  const [run, setRun] = createSignal<RunState | null>(null)
+  const [proj, setProj] = createSignal<ProjectFile | null>(null)
   const [tick, setTick] = createSignal(0)
   const [flagArmed, setFlagArmed] = createSignal(false)
   let lastMtime = 0
@@ -194,7 +220,9 @@ const tui: TuiPlugin = async (api) => {
 
   // 1s poll of the per-project state file (mtime-gated). The tick signal
   // fires every pass so spinner, bar pulse and clocks animate even when the
-  // state file itself is unchanged.
+  // state file itself is unchanged. Transition alerts are tracked PER RUN so
+  // concurrent runs notify independently.
+  const prevRuns = new Map<string, RunState>()
   const timer = setInterval(() => {
     setTick((t) => t + 1)
     stat(flagFile()).then(
@@ -207,15 +235,20 @@ const tui: TuiPlugin = async (api) => {
       .then(async (st) => {
         if (st.mtimeMs === lastMtime) return
         lastMtime = st.mtimeMs
-        const next = JSON.parse(await readFile(file, "utf8")) as RunState
-        const prev = run()
-        setRun(next)
-        await notifyTransitions(prev, next)
+        const next = normalizeProjectFile(JSON.parse(await readFile(file, "utf8")))
+        const nextRuns = next?.runs ?? {}
+        for (const [key, run] of Object.entries(nextRuns)) {
+          await notifyTransitions(prevRuns.get(key) ?? null, run)
+        }
+        prevRuns.clear()
+        for (const [key, run] of Object.entries(nextRuns)) prevRuns.set(key, run)
+        setProj(next)
       })
       .catch(() => {
         if (lastMtime !== 0) {
           lastMtime = 0
-          setRun(null) // state file deleted — hide the widget
+          prevRuns.clear()
+          setProj(null) // state file deleted — hide the widget
         }
       })
   }, 1000)
@@ -227,34 +260,51 @@ const tui: TuiPlugin = async (api) => {
       sidebar_content(_ctx: Readonly<TuiSlotContext>, props: { session_id: string }) {
         const theme = () => api.theme.current
         const sec = () => tick()
-        // Session scoping: the widget belongs to the session that RUNS it.
-        // Other tabs/sessions in the same project must not show this run.
-        const viewedInRun = () => {
-          const s = run()
+        // Session scoping (multi-run): the widget shows the run that belongs
+        // to the session currently viewed — the one keyed by it, or the one
+        // whose orchestrator/agent sessions include it. Switching sessions
+        // switches the sidebar to that session's run.
+        const myRun = (): RunState | null => {
+          const pf = proj()
           const id = props.session_id
-          if (!s || !id) return false
-          if (s.orchestrator === id) return true
-          return (s.agents ?? []).some((a) => a.sessionId === id)
+          if (!pf || !id) return null
+          const keyed = pf.runs[id]
+          if (keyed) return keyed
+          for (const run of Object.values(pf.runs)) {
+            if (run.orchestrator === id) return run
+            if ((run.agents ?? []).some((a) => a.sessionId === id)) return run
+          }
+          return null
         }
-        // A GIGGA session that is not part of the current run and was created
-        // after the run started is FRESH (first state update hasn't landed):
-        // show a placeholder instead of the previous run's leftover tree.
+        const visible = () => !!myRun()
+        // A GIGGA session that has no run yet and was created after the
+        // newest run started is FRESH (first state update hasn't landed):
+        // show a placeholder instead of nothing (or another run's tree).
         const freshGigga = () => {
-          const s = run()
+          const pf = proj()
           const id = props.session_id
-          if (!s || !id || viewedInRun()) return false
-          const info = s.sessions?.[id]
+          if (!pf || !id || myRun()) return false
+          const info = pf.sessions[id]
           if (!info?.agent?.toLowerCase().startsWith("gigga")) return false
-          return (info.createdAt ?? "") > (s.runStartedAt ?? "")
+          let latest = ""
+          for (const run of Object.values(pf.runs)) {
+            if ((run.runStartedAt ?? "") > latest) latest = run.runStartedAt ?? ""
+          }
+          if (latest === "") {
+            // No runs on record at all: only a JUST-created session can be
+            // fresh (older ones are leftovers whose runs were pruned).
+            const created = Date.parse(info.createdAt ?? "")
+            return isFinite(created) && Date.now() - created < 120_000
+          }
+          return (info.createdAt ?? "") > latest
         }
-        const visible = viewedInRun
-        const subagents = () => (run()?.agents ?? []).filter((a) => a.kind !== "orchestrator")
+        const subagents = () => (myRun()?.agents ?? []).filter((a) => a.kind !== "orchestrator")
         const dots = () => [...subagents()].sort((x, y) => dotRank(x) - dotRank(y)).slice(0, 10)
         // A one-shot/fasttrack run: orchestrator active, no subagents, phase
         // never leaves idle. (A pipeline run only looks like this for the few
         // seconds before recon spawns — cosmetic, self-corrects.)
         const fasttracking = () => {
-          const s = run()
+          const s = myRun()
           return !!s && s.phase === "idle" && subagents().length === 0
         }
         const dotColor = (a: AgentEntry) =>
@@ -271,7 +321,7 @@ const tui: TuiPlugin = async (api) => {
         // on those paths, so this re-evaluates every tick — frozen to
         // doneAt once the run lands on done/failed.
         const totalClock = () => {
-          const s = run()
+          const s = myRun()
           if (!s?.runStartedAt) return ""
           const start = Date.parse(s.runStartedAt)
           if (!isFinite(start)) return ""
@@ -280,7 +330,7 @@ const tui: TuiPlugin = async (api) => {
           return isFinite(d) && d >= 0 ? fmtClock(d) : ""
         }
         const headerText = () => {
-          const s = run()!
+          const s = myRun()!
           const clock = totalClock()
           const timed = (bar: string) => (clock ? `${bar} ${clock}` : bar)
           if (s.phase === "failed") {
@@ -304,7 +354,7 @@ const tui: TuiPlugin = async (api) => {
           return `${timed(orchBar(s.phase, sec()))} ${word}`
         }
         const headerColor = () => {
-          const s = run()!
+          const s = myRun()!
           return s.phase === "failed" ? theme().error : s.phase === "done" ? GIGGA_GREEN : GIGGA_RED
         }
 
@@ -329,7 +379,7 @@ const tui: TuiPlugin = async (api) => {
             const clock = elapsedMs(a)
             const tail =
               `${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}` +
-              (a.status === "failed" && (run()?.retries ?? 0) > 0 ? " · retry" : "")
+              (a.status === "failed" && (myRun()?.retries ?? 0) > 0 ? " · retry" : "")
             return (
               <box flexDirection="column" gap={0}>
                 <box flexDirection="row" gap={1}>
@@ -380,7 +430,7 @@ const tui: TuiPlugin = async (api) => {
                     </box>
                   </Show>
                   <For each={subagents()}>{(a, i) => row(a, i(), i() === subagents().length - 1)}</For>
-                  <Show when={run()?.pendingQuestion}>
+                  <Show when={myRun()?.pendingQuestion}>
                     <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
                       {sec() % 2 ? "▶ waiting for your answer" : "▸ waiting for your answer"}
                     </text>

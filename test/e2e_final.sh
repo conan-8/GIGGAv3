@@ -93,7 +93,7 @@ slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in os.path.basename(
 h = hashlib.sha256(d.encode()).hexdigest()[:10]
 print(os.path.join(root, "GIGGA", "projects", f"{slug}-{h}", "state.json"))
 ' "$FX" "$H/.config/opencode")
-md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$ST" 2>/dev/null || echo none)"
+md "state agents:"; code "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));d=(lambda r:max([x for x in r.values() if x.get("phase") not in("done","failed")] or list(r.values()),key=lambda x:x.get("updatedAt") or ""))(d["runs"]) if isinstance(d.get("runs"),dict) and d["runs"] else d; print([(a["kind"],a["id"],a["status"]) for a in d["agents"]])' "$ST" 2>/dev/null || echo none)"
 md "final:"; code "$(ft "$SID")"
 for f in "$H"/.config/opencode/agents/GIGGA-worker-*.md; do sed -i '/^TEST MODE: immediately report Status: blocked/d' "$f"; done
 

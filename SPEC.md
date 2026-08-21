@@ -23,6 +23,13 @@ agent pack via a one-line curl installer.
   project/worktree dir — never in the global dir. The dashboard serves the
   project of its CWD (`GIGGA_PROJECT_DIR` override) and shows it in the
   footer. Legacy global state.json is renamed aside on plugin load.
+- **Multiple concurrent runs** (multi-run): the state file holds ONE RUN PER
+  GIGGA SESSION — `{ updatedAt, sessions, runs: { <orchestratorSessionId>:
+  RunState } }` plus a project-wide session registry. Events are routed to
+  the run that owns their session, so concurrent GIGGA sessions never
+  overwrite each other; the TUI sidebar shows each session its own run when
+  switched to. Finished runs are kept 24 h (cap 20) so switching back still
+  shows their final tree. Legacy single-run files are wrapped on read.
 - **Interrupted runs**: working agents with no state update for 120 s are
   marked `failed (interrupted)` (plugin on load, dashboard on read).
 - **questionRounds enforcement**: at the (cap+1)-th question tool call in a
@@ -77,10 +84,14 @@ agent pack via a one-line curl installer.
 - Fasttrack forcing: `/GIGGA-fasttrack` writes
   `~/.config/opencode/GIGGA/fasttrack.flag`; the orchestrator consumes and
   deletes it at PHASE 1.
-- `state.json` (written atomically by the plugin, tmp+rename):
+- `state.json` (written atomically by the plugin, tmp+rename) — multi-run:
+  `{ updatedAt, sessions: { <sid>: {agent, parent, firstUserText, createdAt} },
+     runs: { <orchestratorSessionId>: RunState } }`, where each RunState is
   `{ phase: idle|recon|questions|plan|executing|checking|done|failed,
      pendingQuestion, originalRequest, agents: [{id, kind, tier, task,
-     status, sessionId, parentSessionId}], updatedAt }`.
+     status, sessionId, parentSessionId}], orchestrator, updatedAt, … }`.
+  (Sessions ≤4 wrote one flat RunState per file; readers wrap that legacy
+  shape into a one-entry `runs` map.)
 
 ## Session-3 refinements (dashboard)
 
