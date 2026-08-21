@@ -74,6 +74,7 @@ interface AgentEntry {
   sessionId: string | null
   startedAt?: string
   endedAt?: string
+  prompt?: number
 }
 
 interface RunState {
@@ -84,8 +85,11 @@ interface RunState {
   orchestrator?: string | null
   retries?: number
   runStartedAt?: string
+  promptStartedAt?: string
   doneAt?: string
   failReason?: string
+  prompts?: string[]
+  currentPrompt?: number
 }
 
 interface ProjectFile {
@@ -299,13 +303,41 @@ const tui: TuiPlugin = async (api) => {
           return (info.createdAt ?? "") > latest
         }
         const subagents = () => (myRun()?.agents ?? []).filter((a) => a.kind !== "orchestrator")
-        const dots = () => [...subagents()].sort((x, y) => dotRank(x) - dotRank(y)).slice(0, 10)
-        // A one-shot/fasttrack run: orchestrator active, no subagents, phase
-        // never leaves idle. (A pipeline run only looks like this for the few
-        // seconds before recon spawns — cosmetic, self-corrects.)
+        const currentPrompt = () => myRun()?.currentPrompt ?? 0
+        const promptAgents = () => subagents().filter((a) => (a.prompt ?? 0) === currentPrompt())
+        // Dots are the CURRENT prompt's traffic lights only (fall back to all
+        // subagents when there is no prompt info) so past prompts don't linger.
+        const dots = () => {
+          const cur = promptAgents()
+          const pool = cur.length ? cur : subagents()
+          return [...pool].sort((x, y) => dotRank(x) - dotRank(y)).slice(0, 10)
+        }
+        // A one-shot/fasttrack run: orchestrator active, no subagents for the
+        // current prompt, phase never leaves idle. (A pipeline run only looks
+        // like this for the few seconds before recon spawns — cosmetic,
+        // self-corrects.)
         const fasttracking = () => {
           const s = myRun()
-          return !!s && s.phase === "idle" && subagents().length === 0
+          return !!s && s.phase === "idle" && promptAgents().length === 0
+        }
+        // Subagent rows interleaved with a muted separator line between
+        // prompt groups — the tree continues across prompts instead of
+        // resetting, and each prompt is visually delimited.
+        type RowItem =
+          | { sep: true; n: number; text: string }
+          | { sep: false; a: AgentEntry; idx: number; last: boolean }
+        const rows = (): RowItem[] => {
+          const list = subagents()
+          const out: RowItem[] = []
+          for (let i = 0; i < list.length; i++) {
+            const a = list[i]
+            const p = a.prompt ?? 0
+            if (p > 0 && (list[i - 1]?.prompt ?? 0) !== p) {
+              out.push({ sep: true, n: p, text: shortTask(myRun()?.prompts?.[p] ?? "", 24) })
+            }
+            out.push({ sep: false, a, idx: i, last: i === list.length - 1 || (list[i + 1].prompt ?? 0) !== p })
+          }
+          return out
         }
         const dotColor = (a: AgentEntry) =>
           a.status === "done"
@@ -316,10 +348,11 @@ const tui: TuiPlugin = async (api) => {
                 ? theme().warning
                 : theme().textMuted
 
-        // Total run time, rendered to the right of the phase bar. Live
-        // (Date.now()) while the run is active — headerText() reads sec()
-        // on those paths, so this re-evaluates every tick — frozen to
-        // doneAt once the run lands on done/failed.
+        // Header clocks: per-prompt time first, then the total session time
+        // when it differs (`0:45/12:30`) — both live (Date.now()) while the
+        // run is active (headerText() reads sec() on its running paths, so
+        // these re-evaluate every tick) and frozen to doneAt once
+        // done/failed.
         const totalClock = () => {
           const s = myRun()
           if (!s?.runStartedAt) return ""
@@ -329,17 +362,33 @@ const tui: TuiPlugin = async (api) => {
           const d = end - start
           return isFinite(d) && d >= 0 ? fmtClock(d) : ""
         }
+        const promptClock = () => {
+          const s = myRun()
+          if (!s?.promptStartedAt) return ""
+          const start = Date.parse(s.promptStartedAt)
+          if (!isFinite(start)) return ""
+          const end = s.doneAt ? Date.parse(s.doneAt) : Date.now()
+          const d = end - start
+          return isFinite(d) && d >= 0 ? fmtClock(d) : ""
+        }
+        const clocks = () => {
+          const p = promptClock()
+          const t = totalClock()
+          if (!p && !t) return ""
+          if (!p) return t
+          if (!t) return p
+          return p === t ? p : `${p}/${t}`
+        }
         const headerText = () => {
           const s = myRun()!
-          const clock = totalClock()
-          const timed = (bar: string) => (clock ? `${bar} ${clock}` : bar)
+          const timed = (bar: string) => (clocks() ? `${bar} ${clocks()}` : bar)
           if (s.phase === "failed") {
             return s.failReason === "interrupted"
               ? `✗ ${timed("▓▓▓▓░░")} interrupted`
               : `✗ ${timed("▓▓▓▓░░")} failed — /GIGGA-retry`
           }
           if (s.phase === "done") {
-            const ws = s.agents.filter((a) => a.kind === "worker")
+            const ws = s.agents.filter((a) => a.kind === "worker" && (a.prompt ?? 0) === (s.currentPrompt ?? 0))
             const wn = ws.length ? ` · ${ws.length} worker${ws.length === 1 ? "" : "s"}` : ""
             const flash = !!(s.doneAt && Date.now() - Date.parse(s.doneAt) < 1600)
             return `${flash ? "🎉" : "✓"} ${timed("▓▓▓▓▓▓")} done${wn}`
@@ -429,7 +478,19 @@ const tui: TuiPlugin = async (api) => {
                       <For each={dots()}>{(a) => <text fg={dotColor(a)} wrapMode="none">● </text>}</For>
                     </box>
                   </Show>
-                  <For each={subagents()}>{(a, i) => row(a, i(), i() === subagents().length - 1)}</For>
+                  <For each={rows()}>
+                    {(item) =>
+                      item.sep ? (
+                        <box flexDirection="row" gap={0}>
+                          <text fg={theme().textMuted} wrapMode="none">
+                            {`──── #${item.n}${item.text ? ` · ${item.text}` : ""} ────`}
+                          </text>
+                        </box>
+                      ) : (
+                        row(item.a, item.idx, item.last)
+                      )
+                    }
+                  </For>
                   <Show when={myRun()?.pendingQuestion}>
                     <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
                       {sec() % 2 ? "▶ waiting for your answer" : "▸ waiting for your answer"}

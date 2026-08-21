@@ -83,6 +83,9 @@ interface AgentEntry {
   parentSessionId: string
   startedAt?: string
   endedAt?: string
+  // Prompt (within this session's run) this agent was spawned for. Agents
+  // are grouped by it so the sidebar draws a separator between prompts.
+  prompt?: number
 }
 
 interface RunState {
@@ -98,9 +101,17 @@ interface RunState {
   questionCalls: Record<string, number>
   retries: number
   runStartedAt?: string
+  promptStartedAt?: string
   doneAt?: string
   failReason?: "error" | "interrupted"
   recordedAt?: string
+  // Multi-prompt: a session's run persists across prompts (the tree grows,
+  // never resets). prompts[n] is the text of the n-th prompt; currentPrompt
+  // is the index of the prompt currently being worked. recordedPromptCount
+  // tracks how many prompts have been written to history.jsonl.
+  prompts: string[]
+  currentPrompt: number
+  recordedPromptCount: number
 }
 
 interface SessionInfo {
@@ -131,9 +142,13 @@ const freshRun = (orchestrator: string | null): RunState => ({
   questionCalls: {},
   retries: 0,
   runStartedAt: new Date().toISOString(),
+  promptStartedAt: new Date().toISOString(),
   doneAt: undefined,
   failReason: undefined,
   recordedAt: undefined,
+  prompts: [],
+  currentPrompt: 0,
+  recordedPromptCount: 0,
 })
 
 const freshProjectState = (): ProjectState => ({
@@ -144,13 +159,29 @@ const freshProjectState = (): ProjectState => ({
 
 // Accepts the multi-run shape and the legacy single-run shape (sessions ≤4,
 // one flat RunState per file) and normalizes to multi-run.
+function normalizeRun(run: any): RunState {
+  const r = (run ?? {}) as RunState
+  if (!Array.isArray(r.prompts)) r.prompts = []
+  if (typeof r.currentPrompt !== "number" || r.currentPrompt < 0) {
+    r.currentPrompt = r.prompts.length ? r.prompts.length - 1 : 0
+  }
+  if (typeof r.recordedPromptCount !== "number" || r.recordedPromptCount < 0) {
+    // Legacy runs are treated as fully recorded — never re-record their history.
+    r.recordedPromptCount = r.prompts.length || (r.phase === "done" || r.phase === "failed" ? 1 : 0)
+  }
+  if (!r.promptStartedAt) r.promptStartedAt = r.runStartedAt ?? r.updatedAt
+  return r
+}
+
 function normalizeProjectState(raw: any): ProjectState {
   if (!raw || typeof raw !== "object") return freshProjectState()
   if (raw.runs && typeof raw.runs === "object") {
+    const runs: Record<string, RunState> = {}
+    for (const [k, v] of Object.entries(raw.runs)) runs[k] = normalizeRun(v)
     return {
       updatedAt: raw.updatedAt ?? new Date().toISOString(),
       sessions: raw.sessions ?? {},
-      runs: raw.runs,
+      runs,
     }
   }
   if (raw.phase || raw.agents || raw.orchestrator) {
@@ -162,7 +193,7 @@ function normalizeProjectState(raw: any): ProjectState {
     return {
       updatedAt: raw.updatedAt ?? new Date().toISOString(),
       sessions,
-      runs: { [orch ?? "legacy"]: run },
+      runs: { [orch ?? "legacy"]: normalizeRun(run) },
     }
   }
   return freshProjectState()
@@ -397,6 +428,21 @@ function fmtClock(ms: number): string {
   return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`
 }
 
+// Clock text for the header: per-prompt time first, then the total session
+// time when it differs (`0:45/12:30`). Used by the serve-mode title and
+// mirrored in plugin/GIGGA-sidebar.tsx.
+function clockText(s: RunState): string | null {
+  const end = s.doneAt ? Date.parse(s.doneAt) : Date.now()
+  const p = s.promptStartedAt ? Date.parse(s.promptStartedAt) : NaN
+  const t = s.runStartedAt ? Date.parse(s.runStartedAt) : NaN
+  const pms = isFinite(p) && isFinite(end) ? Math.max(0, end - p) : null
+  const tms = isFinite(t) && isFinite(end) ? Math.max(0, end - t) : null
+  if (pms == null && tms == null) return null
+  if (pms == null) return fmtClock(tms!)
+  if (tms == null) return fmtClock(pms)
+  return pms === tms ? fmtClock(pms) : `${fmtClock(pms)}/${fmtClock(tms)}`
+}
+
 function elapsedMs(a: AgentEntry): number | null {
   if (!a.startedAt) return null
   const d = (a.endedAt ? Date.parse(a.endedAt) : Date.now()) - Date.parse(a.startedAt)
@@ -423,8 +469,9 @@ function orchestratorTitle(s: RunState, sec: number, flash = false): string {
     return s.failReason === "interrupted" ? "✗ GIGGA ▓▓▓▓░░ interrupted" : "✗ GIGGA ▓▓▓▓░░ failed — /GIGGA-retry"
   }
   if (s.phase === "done") {
-    const ws = s.agents.filter((a) => a.kind === "worker")
-    const dur = s.runStartedAt && s.doneAt ? ` · ${fmtClock(Date.parse(s.doneAt) - Date.parse(s.runStartedAt))}` : ""
+    const ws = s.agents.filter((a) => a.kind === "worker" && (a.prompt ?? 0) === (s.currentPrompt ?? 0))
+    const clock = clockText(s)
+    const dur = clock ? ` · ${clock}` : ""
     const wsSuffix = ws.length ? ` · ${ws.length} worker${ws.length === 1 ? "" : "s"}` : ""
     return `${flash ? "🎉" : "✓"} GIGGA ▓▓▓▓▓▓ done${dur}${wsSuffix}`
   }
@@ -438,25 +485,31 @@ function orchestratorTitle(s: RunState, sec: number, flash = false): string {
   return dots ? `⚡ GIGGA ${orchBar(s.phase, sec)} · ${dots} ${word}` : `⚡ GIGGA ${orchBar(s.phase, sec)} ${word}`
 }
 
-function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, sec: number): string {
-  const conn = isLast ? "└─" : "├─"
+function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, firstOfPrompt: boolean, sec: number): string {
+  const promptIdx = a.prompt ?? 0
+  // Serve-mode: there is no standalone separator row in the session/title
+  // list, so the first subagent row of each new prompt gets a `┌─` connector
+  // and a `#n` suffix to mark the prompt boundary.
+  const conn = firstOfPrompt && promptIdx > 0 ? "┌─" : isLast ? "└─" : "├─"
+  const sep = firstOfPrompt && promptIdx > 0 ? ` #${promptIdx}` : ""
   const name = a.kind === "worker" ? `#${a.id} ${shortTask(a.task, 22)}` : `${a.kind} ${shortTask(a.task, 18)}`
   if (a.status !== "working") {
     const clock = elapsedMs(a)
-    return `${conn} ${dotOf(a)} ${name} ${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}${a.status === "failed" && s.retries > 0 ? " · retry" : ""}`
+    return `${conn} ${dotOf(a)} ${name} ${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}${a.status === "failed" && s.retries > 0 ? " · retry" : ""}${sep}`
   }
   const spin = SPINNER[(sec + idx) % SPINNER.length]
   const ms = elapsedMs(a)
-  return `${conn} 🟡 ${name} ${spin}${ms != null ? ` · ${fmtClock(ms)}` : ""}`
+  return `${conn} 🟡 ${name} ${spin}${ms != null ? ` · ${fmtClock(ms)}` : ""}${sep}`
 }
 
 async function renderSidebar(run: RunState, flash = false) {
   if (!run.orchestrator || !serverUrl) return
   const sec = Math.floor(Date.now() / 1000)
   const rows = run.agents.filter((a) => a.kind !== "orchestrator" && a.sessionId)
+  const firstOfPrompt = rows.map((a, i) => i === 0 || (a.prompt ?? 0) !== (rows[i - 1].prompt ?? 0))
   await Promise.all([
     patchTitle(run.orchestrator, orchestratorTitle(run, sec, flash)),
-    ...rows.map((a, i) => patchTitle(a.sessionId!, childTitle(run, a, i, i === rows.length - 1, sec))),
+    ...rows.map((a, i) => patchTitle(a.sessionId!, childTitle(run, a, i, i === rows.length - 1, firstOfPrompt[i], sec))),
   ])
 }
 
@@ -601,37 +654,48 @@ async function recoverStale() {
 }
 
 // ------------------------------------------- run history (self-improvement) -
-// One JSON line per finished run in <project dir>/history.jsonl — objective
-// metrics (durations, tier overruns, retries, checker rounds) the
-// orchestrator reads at session start to plan better over time. Written at
-// the terminal transitions only; run.recordedAt claims the write so duplicate
-// events / multiple plugin instances record exactly once.
+// One JSON line per finished PROMPT (a session's run spans prompts now) in
+// <project dir>/history.jsonl — objective metrics (durations, tier overruns,
+// retries, checker rounds) the orchestrator reads at session start to plan
+// better over time. Written at the terminal transitions only;
+// run.recordedPromptCount claims each prompt's write so duplicate events /
+// multiple plugin instances record exactly once.
 const HISTORY_FILE = () => join(STATE_DIR, "history.jsonl")
 
-function buildRunRecord(s: RunState) {
-  const end = s.doneAt ? Date.parse(s.doneAt) : Date.now()
-  const start = s.runStartedAt ? Date.parse(s.runStartedAt) : end
-  const agents = s.agents
-    .filter((a) => a.kind !== "orchestrator")
-    .map((a) => {
-      const dur = elapsedMs(a)
-      const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
-      return {
-        kind: a.kind,
-        tier: a.tier ?? undefined,
-        status: a.status,
-        durationMs: dur ?? undefined,
-        overBudget: budget != null && dur != null ? dur > budget : undefined,
-      }
-    })
+function buildRunRecord(s: RunState, promptIdx?: number) {
+  const idx = Math.max(0, promptIdx ?? s.currentPrompt ?? 0)
+  const pAgents = s.agents.filter((a) => (a.prompt ?? 0) === idx && a.kind !== "orchestrator")
+  const starts = pAgents.map((a) => (a.startedAt ? Date.parse(a.startedAt) : NaN)).filter((n) => isFinite(n))
+  const ends = pAgents.map((a) => (a.endedAt ? Date.parse(a.endedAt) : NaN)).filter((n) => isFinite(n))
+  const start = starts.length
+    ? Math.min(...starts)
+    : idx === s.currentPrompt && s.promptStartedAt
+      ? Date.parse(s.promptStartedAt)
+      : idx === 0 && s.runStartedAt
+        ? Date.parse(s.runStartedAt)
+        : NaN
+  const end = ends.length ? Math.max(...ends) : s.doneAt ? Date.parse(s.doneAt) : NaN
+  const dur = isFinite(start) && isFinite(end) ? Math.max(0, end - start) : undefined
+  const agents = pAgents.map((a) => {
+    const d = elapsedMs(a)
+    const budget = a.tier ? TIER_BUDGET_MS[a.tier] : undefined
+    return {
+      kind: a.kind,
+      tier: a.tier ?? undefined,
+      status: a.status,
+      durationMs: d ?? undefined,
+      overBudget: budget != null && d != null ? d > budget : undefined,
+    }
+  })
   return {
     ts: new Date().toISOString(),
     phase: s.phase,
     failReason: s.failReason,
-    request: shortTask(s.originalRequest, 120),
-    durationMs: isFinite(end - start) ? Math.max(0, end - start) : undefined,
+    prompt: idx,
+    request: shortTask(s.prompts?.[idx] || s.originalRequest, 120),
+    durationMs: dur,
     retries: s.retries,
-    checkerInvocations: s.agents.filter((a) => a.kind === "checker").length,
+    checkerInvocations: pAgents.filter((a) => a.kind === "checker").length,
     agents,
   }
 }
@@ -639,18 +703,21 @@ function buildRunRecord(s: RunState) {
 async function recordRun(ps: ProjectState, key: string) {
   const run = ps.runs[key]
   if (!run || (run.phase !== "done" && run.phase !== "failed")) return
-  const rec = buildRunRecord(run)
+  const promptIdx = Math.max(0, run.currentPrompt ?? 0)
+  const rec = buildRunRecord(run, promptIdx)
   const claimed = await update((st) => {
     const r = st.runs[key]
-    if (!r || r.recordedAt || (r.phase !== "done" && r.phase !== "failed")) return false
-    r.recordedAt = new Date().toISOString()
+    if (!r || (r.phase !== "done" && r.phase !== "failed")) return false
+    if ((r.recordedPromptCount ?? 0) > promptIdx) return false
+    r.recordedPromptCount = promptIdx + 1
+    if (r.recordedAt === undefined) r.recordedAt = new Date().toISOString() // legacy first-write stamp
     return true
   })
   if (!claimed) return
   try {
     await mkdir(STATE_DIR, { recursive: true })
     await appendFile(HISTORY_FILE(), JSON.stringify(rec) + "\n")
-    await log(`run recorded: ${rec.phase}${rec.failReason ? ` (${rec.failReason})` : ""} ${rec.durationMs ?? "?"}ms agents=${rec.agents.length} retries=${rec.retries} (run ${key})`)
+    await log(`prompt recorded (#${promptIdx}): ${rec.phase}${rec.failReason ? ` (${rec.failReason})` : ""} ${rec.durationMs ?? "?"}ms agents=${rec.agents.length} retries=${rec.retries} (run ${key})`)
   } catch (e) {
     await log(`run record failed: ${String(e)}`)
   }
@@ -839,29 +906,44 @@ async function handleEvent(ev: { type: string; properties?: any }) {
         }
         // Each GIGGA primary session owns its own run (multi-run): concurrent
         // GIGGA sessions never overwrite each other. Subagent sessions
-        // (classify hits) and parented sessions never start runs.
+        // (classify hits) and parented sessions never start runs. A run is
+        // SESSION-scoped, not prompt-scoped: further prompts continue the same
+        // tree (new agents appended with a higher prompt index) instead of
+        // resetting it.
         if (isOrchestratorAgent(next.agent ?? cur.agent) && !next.parent) {
           let run = ps.runs[sid]
-          // New activity in a finished run's own session = a fresh run:
-          // replace it in place so this session's sidebar shows the new run,
-          // not the previous one's tree. The >3s guard keeps a late-arriving
-          // update of the run's final message from wiping the just-set state.
-          if (
-            run &&
-            (run.phase === "done" || run.phase === "failed") &&
-            run.doneAt &&
-            Date.now() - Date.parse(run.doneAt) > 3000
-          ) {
-            run = null as any
-          }
           if (!run) {
             run = ps.runs[sid] = freshRun(sid)
             lastAnnouncedPhase.delete(sid)
             bound = true
             changed = true
           }
+          // A new user prompt in a finished run's session starts a new prompt
+          // SEGMENT: the tree keeps its past agents and the phase re-arms so
+          // the sidebar shows this prompt's activity. The >3s guard keeps a
+          // late-arriving update of the run's final message from re-arming.
+          const userText = firstUserText ?? ""
+          const isUserPrompt = info.role === "user" && userText.length > 0
+          if (
+            isUserPrompt &&
+            (run.phase === "done" || run.phase === "failed") &&
+            run.doneAt &&
+            Date.now() - Date.parse(run.doneAt) > 3000
+          ) {
+            run.phase = "idle"
+            run.pendingQuestion = false
+            run.doneAt = undefined
+            run.failReason = undefined
+            run.retries = 0
+            run.currentPrompt = run.prompts.length
+            run.prompts.push(userText)
+            run.promptStartedAt = new Date().toISOString()
+            lastAnnouncedPhase.delete(sid)
+            changed = true
+          }
           if (!run.originalRequest && (firstUserText ?? next.firstUserText)) {
             run.originalRequest = (firstUserText ?? next.firstUserText)!
+            if (run.prompts.length === 0) run.prompts.push(run.originalRequest)
             orchTitle = `⚡ GIGGA · ${shortTask(run.originalRequest)}`
             changed = true
           }
@@ -997,6 +1079,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
             sessionId: null,
             parentSessionId: parent,
             startedAt: new Date().toISOString(),
+            prompt: run.currentPrompt,
           }
           run.agents.push(entry)
           run.taskCalls[callID] = { entryIndex: run.agents.length - 1, asked: true }

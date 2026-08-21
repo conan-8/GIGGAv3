@@ -30,6 +30,14 @@ agent pack via a one-line curl installer.
   overwrite each other; the TUI sidebar shows each session its own run when
   switched to. Finished runs are kept 24 h (cap 20) so switching back still
   shows their final tree. Legacy single-run files are wrapped on read.
+- **Session-scoped tree (multi-prompt)**: a run is per SESSION, not per
+  prompt. Further prompts in a finished (done/failed) run's session continue
+  the same tree instead of resetting it — the phase re-arms (guarded by >3s
+  since `doneAt`) and each new subagent is stamped with a `prompt` index.
+  The TUI sidebar draws a muted separator line (`──── #n · short text ────`)
+  between prompt groups, and `history.jsonl` records one line per completed
+  prompt (`recordedPromptCount` claims each write) so self-improvement stays
+  granular across a long session.
 - **Interrupted runs**: working agents with no state update for 120 s are
   marked `failed (interrupted)` (plugin on load, dashboard on read).
 - **questionRounds enforcement**: at the (cap+1)-th question tool call in a

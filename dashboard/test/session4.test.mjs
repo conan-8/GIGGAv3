@@ -181,6 +181,30 @@ test("readProjectState recovers a stale run among multiple runs", async () => {
   assert.equal(onDisk.runs.ses_live.agents[0].status, "working", "fresh run untouched")
 })
 
+test("multi-prompt fields survive the dashboard read path", async () => {
+  const root = await mkdtemp(join(tmpdir(), "GIGGA-mp-"))
+  const proj = join(root, "proj")
+  await mkdir(proj, { recursive: true })
+  const stateFile = projectStatePath(proj, root)
+  await mkdir(dirname(stateFile), { recursive: true })
+  const run = runFixture("done", "ses_a", {
+    doneAt: new Date().toISOString(),
+    agents: [
+      { kind: "worker", id: 1, status: "done", prompt: 0 },
+      { kind: "worker", id: 2, status: "done", prompt: 1 },
+    ],
+  })
+  run.prompts = ["first ask", "second ask"]
+  run.currentPrompt = 1
+  run.recordedPromptCount = 1
+  const file = { updatedAt: new Date().toISOString(), sessions: {}, runs: { ses_a: run } }
+  await writeFile(stateFile, JSON.stringify(file))
+  const state = await readProjectState(proj, root)
+  assert.equal(state.prompts[1], "second ask")
+  assert.equal(state.currentPrompt, 1)
+  assert.equal(state.agents[1].prompt, 1)
+})
+
 test("validateConfig tolerates the `configured` flag", () => {
   const cfg = JSON.parse(JSON.stringify(validCfg()))
   cfg.configured = true

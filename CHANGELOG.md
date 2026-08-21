@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- Session-scoped sidebar tree (not prompt-scoped): further prompts in a
+  finished GIGGA session now continue the same tree instead of resetting it.
+  Each subagent is stamped with a `prompt` index; the TUI sidebar draws a
+  muted separator line (`──── #n · short text ────`) between prompt groups
+  (serve/attach-mode titles mark the first row of each new prompt with a
+  `┌─`/`#n` suffix), and `history.jsonl` records one line per completed
+  prompt so self-improvement stays granular across a long session. The
+  header clock now shows per-prompt time plus the total session time
+  (`0:45/12:30`) once a session spans multiple prompts.
 - Multiple concurrent GIGGA runs per project: state.json now holds one run
   per GIGGA session (`{ updatedAt, sessions, runs: { <orchSessionId>:
   RunState } }`) instead of a single run. Concurrent GIGGA sessions in the
