@@ -108,6 +108,31 @@ else
   msg "Created default $GIGGA_DIR/GIGGA.config.json"
 fi
 
+# Re-apply the user's saved model tiers to the freshly-copied agent files.
+# install.sh copies the repo's DEFAULT model: lines over the installed
+# agents, so without this an update/upgrade silently resets the worker tiers
+# (and drops GIGGA.md's model line) until /GIGGA-setup is re-run. Apply only
+# when a configured config exists — a fresh default config carries tier
+# defaults the user may not even have available, and must not be injected.
+if [ -f "$GIGGA_DIR/GIGGA.config.json" ] \
+   && grep -qE '"configured"[[:space:]]*:[[:space:]]*true' "$GIGGA_DIR/GIGGA.config.json" 2>/dev/null; then
+  APPLY_RUN=""
+  if command -v node >/dev/null 2>&1; then
+    APPLY_RUN="node"
+  elif command -v bun >/dev/null 2>&1; then
+    APPLY_RUN="bun"
+  fi
+  if [ -n "$APPLY_RUN" ] && [ -f "$GIGGA_DIR/dashboard/lib/shared.mjs" ]; then
+    if "$APPLY_RUN" "$GIGGA_DIR/dashboard/lib/shared.mjs" apply "$GIGGA_HOME/agents" "$GIGGA_DIR/GIGGA.config.json" >/dev/null 2>&1; then
+      msg "Re-applied your saved model tiers to the GIGGA agent files."
+    else
+      msg "NOTE: could not re-apply model tiers — run /GIGGA-setup to refresh them."
+    fi
+  else
+    msg "NOTE: node/bun not found (or dashboard missing) — run /GIGGA-setup to re-apply your model tiers."
+  fi
+fi
+
 # ------------------------------------------- merge subagent_depth: 2 -------
 OPENCODE_JSON="$GIGGA_HOME/opencode.json"
 merge_json() {

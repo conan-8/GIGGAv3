@@ -1,4 +1,4 @@
-# GIGGA spec compliance audit — v0.1.0 (2026-08-19)
+# GIGGA spec compliance audit — v3.1 (2026-08-21)
 
 One row per requirement from SPEC.md. Evidence key:
 - `unit` = `node --test dashboard/test/*.test.mjs` (17/17 green)

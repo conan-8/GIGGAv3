@@ -1,4 +1,4 @@
-# GIGGA
+# GIGGA v3.1
 
 An orchestrator agent system for [opencode](https://opencode.ai). GIGGA plans
 your request, asks up to N rounds of clarifying questions, dispatches numbered
@@ -22,6 +22,10 @@ Then:
    currently using (recorded per prompt by the plugin) and gets to work —
    no setup questions. `/GIGGA-setup` changes tiers/settings later (one
    batched confirm, defaults to your current model for all tiers).
+
+Update: re-run the one-liner — it is idempotent, refreshes the agent pack +
+plugin + dashboard to latest, and re-applies your saved model tiers (your
+`GIGGA.config.json` is never overwritten).
 
 Uninstall: `bash uninstall.sh` (removes only GIGGA files, restores your
 opencode.json backup).

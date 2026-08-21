@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v3.1 — 2026-08-21
 
 ### Added
 - Session-scoped sidebar tree (not prompt-scoped): further prompts in a
@@ -102,6 +102,12 @@
   all helpers, including `projectStatePath`, are module-private. Verified
   end-to-end: `opencode run` in a scratch project logs `plugin loaded`,
   writes `server.json`, zero load errors.
+- Re-running the installer (updating to a newer repo) silently reset the
+  worker `model:` lines to the anthropic defaults and dropped `GIGGA.md`'s
+  model line — `install.sh` copies the repo's default agent files but never
+  re-applied the saved tiers. It now runs `shared.mjs apply` after the copy
+  when a `configured: true` config exists, so a user's tier choices survive
+  an update (fresh installs still ship defaults and inject nothing).
 
 ### Changed
 - TUI sidebar: sessions are now titled as an **animated progress tree**
