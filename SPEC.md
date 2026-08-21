@@ -34,9 +34,12 @@ agent pack via a one-line curl installer.
   prompt. Further prompts in a finished (done/failed) run's session continue
   the same tree instead of resetting it — the phase re-arms (guarded by >3s
   since `doneAt`) and each new subagent is stamped with a `prompt` index.
-  The TUI sidebar draws a muted separator line (`──── #n · short text ────`)
-  between prompt groups, and `history.jsonl` records one line per completed
-  prompt (`recordedPromptCount` claims each write) so self-improvement stays
+  Continuation is text-independent (this build's message.updated carries no
+  text parts): any orchestrator-session activity, a task spawn, or a
+  question in a terminal run begins the next segment. The TUI sidebar draws
+  a muted separator line (`──── #n · short text ────`) between prompt
+  groups, and `history.jsonl` records one line per completed prompt
+  (`recordedPromptCount` claims each write) so self-improvement stays
   granular across a long session.
 - **Interrupted runs**: working agents with no state update for 120 s are
   marked `failed (interrupted)` (plugin on load, dashboard on read).

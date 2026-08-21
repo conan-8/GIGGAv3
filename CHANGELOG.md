@@ -11,7 +11,12 @@
   `┌─`/`#n` suffix), and `history.jsonl` records one line per completed
   prompt so self-improvement stays granular across a long session. The
   header clock now shows per-prompt time plus the total session time
-  (`0:45/12:30`) once a session spans multiple prompts.
+  (`0:45/12:30`) once a session spans multiple prompts. Continuation is
+  text-independent (opencode 1.18.18 delivers message.updated without text
+  parts): any activity in the orchestrator session, a task spawn, or a
+  question in a terminal run begins the next segment — verified by an
+  event-driven integration test driving all three triggers; the plugin now
+  stamps its version into the load log line.
 - Multiple concurrent GIGGA runs per project: state.json now holds one run
   per GIGGA session (`{ updatedAt, sessions, runs: { <orchSessionId>:
   RunState } }`) instead of a single run. Concurrent GIGGA sessions in the

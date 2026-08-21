@@ -53,6 +53,10 @@ const STALE_AFTER_MS = 120_000
 // the user switches back to that session; pruned past the TTL / MAX_RUNS.
 const RUN_TTL_MS = 24 * 3_600_000
 const MAX_RUNS = 20
+// Bump on every plugin change — stamped into the load log line so mixed
+// concurrent opencode instances (old code in memory) are diagnosable from
+// events.log.
+const PLUGIN_VERSION = "5"
 
 // per-project paths — set at plugin init
 let STATE_FILE = join(GIGGA_DIR, "state.json")
@@ -197,6 +201,42 @@ function normalizeProjectState(raw: any): ProjectState {
     }
   }
   return freshProjectState()
+}
+
+// ------------------------------------------- multi-prompt continuation -----
+// A run is session-scoped: a further prompt in a terminal (done/failed)
+// run's session CONTINUES the tree instead of resetting it. Callers gate on
+// terminal phase + >3s past doneAt (same guard the old reset used —
+// field-proven; a late update of the final message never re-arms in
+// practice). Labels are BEST-EFFORT: this opencode build delivers
+// message.updated without text parts (DEVIATIONS #31), so a segment's label
+// may stay empty and the sidebar renders `──── #N ────`.
+// Three independent triggers (any one suffices):
+//   1. message.updated — ANY activity in the orchestrator session (the old
+//      reset code's exact trigger; role/text NOT required);
+//   2. message.part.updated task-running — a subagent spawn;
+//   3. question.asked — a new prompt opening with questions.
+function nextPromptIndex(run: RunState): number {
+  // prompts[] may lag the agents (prompt 0's label was never captured on
+  // this build): the next index must clear every agent's prompt index too,
+  // else the second prompt's agents would collide with prompt 0's and no
+  // separator would render.
+  let n = run.prompts.length
+  for (const a of run.agents) if ((a.prompt ?? 0) + 1 > n) n = (a.prompt ?? 0) + 1
+  return n
+}
+
+function beginPromptSegment(run: RunState, label: string) {
+  const n = nextPromptIndex(run)
+  while (run.prompts.length < n) run.prompts.push("")
+  run.phase = "idle"
+  run.pendingQuestion = false
+  run.doneAt = undefined
+  run.failReason = undefined
+  run.retries = 0
+  run.currentPrompt = run.prompts.length
+  run.prompts.push(label)
+  run.promptStartedAt = new Date().toISOString()
 }
 
 let serverUrl: URL | null = null
@@ -769,7 +809,7 @@ export const GiggaPlugin: Plugin = async (input) => {
   STATE_TMP = `${STATE_FILE}.tmp`
   EVENTS_LOG = join(STATE_DIR, "events.log")
   LOCK_DIR = join(STATE_DIR, ".lock")
-  await log(`plugin loaded (directory=${input.directory}, project=${projectDir})`)
+  await log(`GIGGA plugin v${PLUGIN_VERSION} loaded (directory=${input.directory}, project=${projectDir})`)
 
   // server discovery for the dashboard
   try {
@@ -893,6 +933,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       }
       let orchTitle: string | null = null
       let bound = false
+      let continued = false
       await update((ps) => {
         const cur = ps.sessions[sid] ?? {}
         const next = { ...cur }
@@ -918,27 +959,26 @@ async function handleEvent(ev: { type: string; properties?: any }) {
             bound = true
             changed = true
           }
-          // A new user prompt in a finished run's session starts a new prompt
-          // SEGMENT: the tree keeps its past agents and the phase re-arms so
-          // the sidebar shows this prompt's activity. The >3s guard keeps a
-          // late-arriving update of the run's final message from re-arming.
-          const userText = firstUserText ?? ""
-          const isUserPrompt = info.role === "user" && userText.length > 0
+          // New activity in a terminal run's session = a new prompt SEGMENT
+          // (the exact trigger the old reset code used — any message.updated,
+          // no role/text required, since this build delivers no text parts).
+          // The tree keeps its past agents; the phase re-arms so the sidebar
+          // shows this prompt's activity. The >3s guard keeps a late-arriving
+          // update of the run's final message from re-arming.
           if (
-            isUserPrompt &&
             (run.phase === "done" || run.phase === "failed") &&
             run.doneAt &&
             Date.now() - Date.parse(run.doneAt) > 3000
           ) {
-            run.phase = "idle"
-            run.pendingQuestion = false
-            run.doneAt = undefined
-            run.failReason = undefined
-            run.retries = 0
-            run.currentPrompt = run.prompts.length
-            run.prompts.push(userText)
-            run.promptStartedAt = new Date().toISOString()
+            beginPromptSegment(run, firstUserText ?? "")
             lastAnnouncedPhase.delete(sid)
+            continued = true
+            changed = true
+          }
+          // Label backfill: if THIS prompt's label is empty and a user text
+          // ever arrives (newer builds do deliver parts), fill it in.
+          if (firstUserText && run.prompts[run.currentPrompt] === "") {
+            run.prompts[run.currentPrompt] = firstUserText
             changed = true
           }
           if (!run.originalRequest && (firstUserText ?? next.firstUserText)) {
@@ -954,6 +994,11 @@ async function handleEvent(ev: { type: string; properties?: any }) {
       if (bound) {
         await log(`run started: ${sid} (agent=${(await readState()).sessions[sid]?.agent ?? "?"})`)
         await refreshSidebar() // starts the sweep — ⚡ row goes live immediately
+      }
+      if (continued) {
+        const r = (await readState()).runs[sid]
+        await log(`prompt #${r?.currentPrompt ?? "?"} continues run ${sid} — tree kept, phase re-armed`)
+        await refreshSidebar() // restart the sweep for the continued prompt
       }
       return
     }
@@ -972,7 +1017,21 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           key = p.sessionID
         }
         const run = ps.runs[key]
-        if (run.answeredQuestions[rid]) return false
+        // Continuation catch-all: a question in a terminal run (>3s past
+        // doneAt) means a new prompt opened with questions — begin its
+        // segment so it does not sit under the stale done header. `segmented`
+        // keeps the write alive past the duplicate-question early exit.
+        let segmented = false
+        if (
+          (run.phase === "done" || run.phase === "failed") &&
+          run.doneAt &&
+          Date.now() - Date.parse(run.doneAt) > 3000
+        ) {
+          beginPromptSegment(run, "")
+          lastAnnouncedPhase.delete(key!)
+          segmented = true
+        }
+        if (run.answeredQuestions[rid]) return segmented
         run.answeredQuestions[rid] = true
         run.questionCalls[p.sessionID] = (run.questionCalls[p.sessionID] ?? 0) + 1
         run.pendingQuestion = true
@@ -1058,7 +1117,24 @@ async function handleEvent(ev: { type: string; properties?: any }) {
             k = parent
           }
           const run = ps.runs[k]
-          if (run.taskCalls[callID]) return false
+          // Continuation catch-all: a subagent spawn in a terminal run (>3s
+          // past doneAt) begins a new prompt segment even when the new
+          // prompt's message.updated never carried text (or never fired).
+          // Runs BEFORE the dup-check; `segmented` keeps the write alive on
+          // the early-exit dup paths below (returning false would DISCARD
+          // the segment mutation).
+          let segmented = false
+          if (
+            (run.phase === "done" || run.phase === "failed") &&
+            run.doneAt &&
+            Date.now() - Date.parse(run.doneAt) > 3000
+          ) {
+            beginPromptSegment(run, "")
+            lastAnnouncedPhase.delete(k)
+            segmented = true
+            key = k // log/refresh even if the task entry itself is a dup
+          }
+          if (run.taskCalls[callID]) return segmented
           const task = String(st.input?.description ?? st.input?.prompt ?? "").slice(0, 200)
           const dup = run.agents.some(
             (a) =>
@@ -1068,7 +1144,7 @@ async function handleEvent(ev: { type: string; properties?: any }) {
           )
           if (dup) {
             run.taskCalls[callID] = { entryIndex: -1, asked: true }
-            return false
+            return segmented
           }
           const entry: AgentEntry = {
             id: cls.kind === "worker" ? ++run.workerCounter : 0,
