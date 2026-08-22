@@ -7,10 +7,14 @@
  * a flashing current step and a ticking total-run clock to its right, one
  * indicator light per subagent (done / failed / running / spawning), and a
  * tree row per subagent with a braille spinner and ticking clock for
- * workers, freezing to ✓/✗ m:ss on completion. Also raises an
- * in-TUI toast plus opencode's cross-platform attention notification (desktop
- * notification + named sound, user-tunable in tui.json) when GIGGA asks a
- * question, finishes, or fails.
+ * workers, freezing to ✓/✗ m:ss on completion. A red "reading" row sits at
+ * the tree tail while a prompt's first agent has yet to spawn; fasttrack
+ * subagents render as their own red rows; a muted separator line appears
+ * the instant a continuation prompt lands (before its first agent); and the
+ * tree is capped at 20 agent rows with a muted "… +N earlier" head line.
+ * Also raises an in-TUI toast plus opencode's cross-platform attention
+ * notification (desktop notification + named sound, user-tunable in
+ * tui.json) when GIGGA asks a question, finishes, or fails.
  *
  * Why this exists: in plain TUI mode opencode hosts NO HTTP server, so the
  * backend plugin's title-PATCH sidebar (plugin/GIGGA.ts) and HTTP toasts
@@ -147,14 +151,6 @@ function orchBar(phase: string, sec: number): string {
   return "▓".repeat(step - 1) + (sec % 2 ? "░" : "▓") + "░".repeat(6 - step)
 }
 
-// Fasttrack/one-shot runs: a 2-cell gap races across a full bar, one cell
-// per tick — visibly accelerated next to the normal bar's slow pulse.
-function fastBar(sec: number): string {
-  const n = 8
-  const gap = sec % n
-  return Array.from({ length: n }, (_, i) => (i === gap || i === (gap + 1) % n ? "░" : "▓")).join("")
-}
-
 const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
 
 // Proper red for the GIGGA brand — theme-independent (theme().error is
@@ -170,8 +166,35 @@ const tui: TuiPlugin = async (api) => {
   const [tick, setTick] = createSignal(0)
   const [flagArmed, setFlagArmed] = createSignal(false)
   let lastMtime = 0
+  let lastSize = 0
 
-  const cfgRoot = () => process.env.GIGGA_HOME ?? api.state.path?.config ?? join(homedir(), ".config", "opencode")
+  // Primary config root mirrors the backend writer (plugin/GIGGA.ts line 46):
+  // GIGGA_HOME or ~/.config/opencode — opencode's config path is NOT in that
+  // chain (the backend never consults it). When opencode runs with a custom/
+  // XDG config dir, the GIGGA state lives under that config dir instead, so we
+  // fall back to it only when the primary root has no GIGGA subdirectory while
+  // the config dir does. Resolved ONCE at init (never per tick): cfgRoot()
+  // returns the memo, or the primary expression while resolution is landing.
+  const primaryCfgRoot = () => process.env.GIGGA_HOME ?? join(homedir(), ".config", "opencode")
+  let resolvedCfgRoot: string | null = null
+  void (async () => {
+    const primary = primaryCfgRoot()
+    try {
+      await stat(join(primary, "GIGGA"))
+      resolvedCfgRoot = primary
+      return
+    } catch {}
+    const alt = api.state.path?.config
+    if (alt) {
+      try {
+        await stat(join(alt, "GIGGA"))
+        resolvedCfgRoot = alt
+        return
+      } catch {}
+    }
+    resolvedCfgRoot = primary
+  })()
+  const cfgRoot = () => resolvedCfgRoot ?? primaryCfgRoot()
   const stateFile = () => {
     const dir = api.state.path?.worktree || api.state.path?.directory
     return dir ? projectStatePath(dir, cfgRoot()) : null
@@ -210,13 +233,23 @@ const tui: TuiPlugin = async (api) => {
             sound: (await soundOn()) ? { name: "done" } : false,
           })
         } else if (next.phase === "failed") {
-          api.ui.toast({ title: "GIGGA", message: "GIGGA: failed / needs retry", variant: "error" })
-          await api.attention.notify({
-            title: "GIGGA",
-            message: "Run failed — /GIGGA-retry",
-            notification: true,
-            sound: (await soundOn()) ? { name: "error" } : false,
-          })
+          if (next.failReason === "interrupted") {
+            api.ui.toast({ title: "GIGGA", message: "GIGGA: run interrupted", variant: "warning" })
+            await api.attention.notify({
+              title: "GIGGA",
+              message: "Run interrupted",
+              notification: true,
+              sound: (await soundOn()) ? { name: "error" } : false,
+            })
+          } else {
+            api.ui.toast({ title: "GIGGA", message: "GIGGA: failed / needs retry", variant: "error" })
+            await api.attention.notify({
+              title: "GIGGA",
+              message: "Run failed — /GIGGA-retry",
+              notification: true,
+              sound: (await soundOn()) ? { name: "error" } : false,
+            })
+          }
         }
       }
     } catch {}
@@ -237,8 +270,9 @@ const tui: TuiPlugin = async (api) => {
     if (!file) return
     stat(file)
       .then(async (st) => {
-        if (st.mtimeMs === lastMtime) return
+        if (st.mtimeMs === lastMtime && st.size === lastSize) return
         lastMtime = st.mtimeMs
+        lastSize = st.size
         const next = normalizeProjectFile(JSON.parse(await readFile(file, "utf8")))
         const nextRuns = next?.runs ?? {}
         for (const [key, run] of Object.entries(nextRuns)) {
@@ -248,11 +282,24 @@ const tui: TuiPlugin = async (api) => {
         for (const [key, run] of Object.entries(nextRuns)) prevRuns.set(key, run)
         setProj(next)
       })
-      .catch(() => {
-        if (lastMtime !== 0) {
+      .catch((err) => {
+        const code = (err as { code?: string } | undefined)?.code
+        if (code === "ENOENT") {
+          // State file genuinely gone (stat or readFile raced past a delete):
+          // hide the widget and reset the transition baseline as before.
+          if (lastMtime !== 0) {
+            lastMtime = 0
+            lastSize = 0
+            prevRuns.clear()
+            setProj(null)
+          }
+        } else {
+          // Transient error (EACCES, EIO, JSON SyntaxError, …): retry the
+          // read next tick, but KEEP the widget and prevRuns so a transition
+          // that happened during the outage still alerts instead of silently
+          // re-baselining every run.
           lastMtime = 0
-          prevRuns.clear()
-          setProj(null) // state file deleted — hide the widget
+          lastSize = 0
         }
       })
   }, 1000)
@@ -272,34 +319,46 @@ const tui: TuiPlugin = async (api) => {
           const pf = proj()
           const id = props.session_id
           if (!pf || !id) return null
-          const keyed = pf.runs[id]
-          if (keyed) return keyed
-          for (const run of Object.values(pf.runs)) {
-            if (run.orchestrator === id) return run
-            if ((run.agents ?? []).some((a) => a.sessionId === id)) return run
+          // Mirrors runKeyFor (plugin/GIGGA.ts): the run is keyed by its
+          // orchestrator session, may list this id as orchestrator/agent, or —
+          // for sub-subagents — may claim one of its ANCESTORS via the session
+          // registry parent chain (walked with a seen-set against cycles).
+          const runFor = (sid: string, seen: Set<string>): RunState | null => {
+            if (seen.has(sid)) return null
+            seen.add(sid)
+            const keyed = pf.runs[sid]
+            if (keyed) return keyed
+            for (const run of Object.values(pf.runs)) {
+              if (run.orchestrator === sid) return run
+              if ((run.agents ?? []).some((a) => a.sessionId === sid)) return run
+            }
+            const parent = pf.sessions[sid]?.parent
+            return parent ? runFor(parent, seen) : null
           }
-          return null
+          return runFor(id, new Set())
         }
         const visible = () => !!myRun()
         // A GIGGA session that has no run yet and was created after the
         // newest run started is FRESH (first state update hasn't landed):
         // show a placeholder instead of nothing (or another run's tree).
         const freshGigga = () => {
+          sec() // 1s tick: re-evaluate so the 120s freshness window lapses.
           const pf = proj()
           const id = props.session_id
           if (!pf || !id || myRun()) return false
           const info = pf.sessions[id]
           if (!info?.agent?.toLowerCase().startsWith("gigga")) return false
+          // Sessions are NEVER pruned but runs ARE: a session whose run was
+          // pruned stays in the registry forever. Without gating both
+          // branches, the newest such session would show an eternal READING
+          // placeholder. The window applies before either branch.
+          const created = Date.parse(info.createdAt ?? "")
+          if (!isFinite(created) || Date.now() - created >= 120_000) return false
           let latest = ""
           for (const run of Object.values(pf.runs)) {
             if ((run.runStartedAt ?? "") > latest) latest = run.runStartedAt ?? ""
           }
-          if (latest === "") {
-            // No runs on record at all: only a JUST-created session can be
-            // fresh (older ones are leftovers whose runs were pruned).
-            const created = Date.parse(info.createdAt ?? "")
-            return isFinite(created) && Date.now() - created < 120_000
-          }
+          if (latest === "") return true
           return (info.createdAt ?? "") > latest
         }
         const subagents = () => (myRun()?.agents ?? []).filter((a) => a.kind !== "orchestrator")
@@ -312,32 +371,77 @@ const tui: TuiPlugin = async (api) => {
           const pool = cur.length ? cur : subagents()
           return [...pool].sort((x, y) => dotRank(x) - dotRank(y)).slice(0, 10)
         }
-        // A one-shot/fasttrack run: orchestrator active, no subagents for the
-        // current prompt, phase never leaves idle. (A pipeline run only looks
-        // like this for the few seconds before recon spawns — cosmetic,
-        // self-corrects.)
-        const fasttracking = () => {
+        // Synthetic red "reading" row: shown while the current prompt is still
+        // idle and no agent has spawned for it yet (a fresh/continuation
+        // prompt's first moments). Always the LAST tree row — it vanishes
+        // once the prompt's first real agent spawns or the phase leaves idle.
+        const reading = (): boolean => {
           const s = myRun()
-          return !!s && s.phase === "idle" && promptAgents().length === 0
+          if (!s || s.phase !== "idle") return false
+          return promptAgents().length === 0
         }
         // Subagent rows interleaved with a muted separator line between
         // prompt groups — the tree continues across prompts instead of
         // resetting, and each prompt is visually delimited.
         type RowItem =
-          | { sep: true; n: number; text: string }
-          | { sep: false; a: AgentEntry; idx: number; last: boolean }
+          | { kind: "early"; n: number }
+          | { kind: "sep"; n: number; text: string }
+          | { kind: "row"; a: AgentEntry; idx: number; last: boolean }
+        // Trailing separator: beginPromptSegment bumps currentPrompt and
+        // pushes its text into prompts[] IMMEDIATELY, before any agent for it
+        // exists — emit the boundary now so it appears the instant the
+        // continuation prompt lands, not only once its first agent spawns.
+        const trailingSep = (): RowItem | null => {
+          const s = myRun()
+          const p = s?.currentPrompt ?? 0
+          if (!s || p <= 0 || s.phase === "done" || s.phase === "failed") return null
+          if (subagents().some((a) => (a.prompt ?? 0) === p)) return null
+          return { kind: "sep", n: p, text: shortTask(s.prompts?.[p] ?? "", 24) }
+        }
         const rows = (): RowItem[] => {
           const list = subagents()
+          const ts = trailingSep()
+          // Anything rendered after the last real agent row (trailing
+          // separator and/or reading row) means that row is no longer the
+          // tree tail: its connector flips to ├─ and its title keeps the │
+          // continuation line.
+          const hasTail = ts !== null || reading()
           const out: RowItem[] = []
           for (let i = 0; i < list.length; i++) {
             const a = list[i]
             const p = a.prompt ?? 0
             if (p > 0 && (list[i - 1]?.prompt ?? 0) !== p) {
-              out.push({ sep: true, n: p, text: shortTask(myRun()?.prompts?.[p] ?? "", 24) })
+              out.push({ kind: "sep", n: p, text: shortTask(myRun()?.prompts?.[p] ?? "", 24) })
             }
-            out.push({ sep: false, a, idx: i, last: i === list.length - 1 || (list[i + 1].prompt ?? 0) !== p })
+            const isLast = i === list.length - 1
+            const last = isLast ? !hasTail : (list[i + 1].prompt ?? 0) !== p
+            out.push({ kind: "row", a, idx: i, last })
           }
-          return out
+          // Cap the tree at 20 AGENT rows (separators don't count): keep the
+          // newest 20, drop older rows (and any separator whose group's agents
+          // were all dropped), and emit a muted "… +N earlier" head line.
+          const MAX = 20
+          const agentCount = out.filter((it) => it.kind === "row").length
+          if (agentCount <= MAX) {
+            return ts ? [...out, ts] : out
+          }
+          const dropped = agentCount - MAX
+          const capped: RowItem[] = []
+          let kept = 0
+          for (let i = out.length - 1; i >= 0; i--) {
+            const it = out[i]
+            if (it.kind === "row") {
+              if (kept < MAX) {
+                capped.unshift(it)
+                kept++
+              }
+            } else if (capped.some((c) => c.kind === "row" && c.a.prompt === it.n)) {
+              capped.unshift(it)
+            }
+          }
+          if (ts) capped.push(ts)
+          if (dropped > 0) capped.unshift({ kind: "early", n: dropped })
+          return capped
         }
         const dotColor = (a: AgentEntry) =>
           a.status === "done"
@@ -399,7 +503,6 @@ const tui: TuiPlugin = async (api) => {
               : s.phase === "idle"
                 ? "WORKING"
                 : (PHASE_WORD[s.phase] ?? s.phase.toUpperCase())
-          if (fasttracking()) return `${timed(fastBar(sec()))} FASTTRACK`
           return `${timed(orchBar(s.phase, sec()))} ${word}`
         }
         const headerColor = () => {
@@ -444,6 +547,9 @@ const tui: TuiPlugin = async (api) => {
           // Accessors (not consts): they read sec() so Solid re-evaluates
           // them on every 1s tick — the spinner animates and the clock counts
           // up by the second even when the state file is unchanged.
+          // A working fasttrack subagent renders in GIGGA brand red (terminal
+          // states keep status colors: done → success ✓, failed → error ✗).
+          const red = a.kind === "fasttrack"
           const spin = () => SPINNER[(sec() + idx) % SPINNER.length]
           const clock = () => {
             sec()
@@ -454,12 +560,36 @@ const tui: TuiPlugin = async (api) => {
             <box flexDirection="column" gap={0}>
               <box flexDirection="row" gap={1}>
                 <text fg={theme().textMuted} wrapMode="none">{conn}</text>
-                <text fg={dotColor(a)} wrapMode="none">●</text>
-                <text fg={theme().text} wrapMode="none">{label}</text>
-                <text fg={theme().warning} wrapMode="none">{spin()}</text>
-                <text fg={theme().warning} wrapMode="none">{clock()}</text>
+                <text fg={red ? GIGGA_RED : dotColor(a)} wrapMode="none">●</text>
+                <text fg={red ? GIGGA_RED : theme().text} wrapMode="none">{label}</text>
+                <text fg={red ? GIGGA_RED : theme().warning} wrapMode="none">{spin()}</text>
+                <text fg={red ? GIGGA_RED : theme().warning} wrapMode="none">{clock()}</text>
               </box>
               {titleRow}
+            </box>
+          )
+        }
+
+        // Synthetic red "reading" tail row: the current prompt is idle with
+        // no agent yet. Rendered as a working-agent-style row (└─ connector,
+        // ● dot, `reading` label, braille spinner, ticking clock from
+        // promptStartedAt ?? runStartedAt), all in GIGGA_RED. Always the last
+        // tree row. Every live element reads sec() so it animates per tick.
+        const readingRow = () => {
+          const s = myRun()
+          const start = Date.parse(s?.promptStartedAt ?? s?.runStartedAt ?? "")
+          const spin = () => SPINNER[sec() % SPINNER.length]
+          const clock = () => {
+            sec()
+            return isFinite(start) ? fmtClock(Math.max(0, Date.now() - start)) : ""
+          }
+          return (
+            <box flexDirection="row" gap={1}>
+              <text fg={GIGGA_RED} wrapMode="none">└─</text>
+              <text fg={GIGGA_RED} wrapMode="none">●</text>
+              <text fg={GIGGA_RED} wrapMode="none">reading</text>
+              <text fg={GIGGA_RED} wrapMode="none">{spin()}</text>
+              <text fg={GIGGA_RED} wrapMode="none">{clock()}</text>
             </box>
           )
         }
@@ -480,7 +610,11 @@ const tui: TuiPlugin = async (api) => {
                   </Show>
                   <For each={rows()}>
                     {(item) =>
-                      item.sep ? (
+                      item.kind === "early" ? (
+                        <box flexDirection="row" gap={0}>
+                          <text fg={theme().textMuted} wrapMode="none">{`… +${item.n} earlier`}</text>
+                        </box>
+                      ) : item.kind === "sep" ? (
                         <box flexDirection="row" gap={0}>
                           <text fg={theme().textMuted} wrapMode="none">
                             {`──── #${item.n}${item.text ? ` · ${item.text}` : ""} ────`}
@@ -491,6 +625,7 @@ const tui: TuiPlugin = async (api) => {
                       )
                     }
                   </For>
+                  <Show when={reading()}>{readingRow()}</Show>
                   <Show when={myRun()?.pendingQuestion}>
                     <text fg={theme().warning} attributes={TextAttributes.BOLD} wrapMode="none">
                       {sec() % 2 ? "▶ waiting for your answer" : "▸ waiting for your answer"}
