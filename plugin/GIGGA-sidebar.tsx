@@ -153,6 +153,72 @@ function orchBar(phase: string, sec: number): string {
 
 const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
 
+// ---------------------------------------- worker funny-name generator ------
+// Office-satire persona names riffing on a worker's actual task. Deterministic
+// (seeded by task+id) so the name never flickers between the 1s title sweeps
+// and matches plugin/GIGGA.ts. MUST stay in sync with that file.
+const NAME_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "for", "of", "to", "in", "on", "at", "by", "as",
+  "with", "from", "our", "your", "this", "that", "into", "also", "just", "some",
+  "fix", "fixes", "add", "adds", "update", "updates", "change", "changes", "make",
+  "makes", "refactor", "refactors", "implement", "implements", "write", "writes",
+  "create", "creates", "remove", "removes", "delete", "deletes", "use", "uses",
+  "get", "set", "run", "runs", "check", "checks", "ensure", "ensures", "improve",
+  "optimize", "migrate", "test", "tests", "build", "builds", "modify", "rewrite",
+  "handle", "handles", "wire", "wires", "clean", "cleans", "tweak", "tweaks",
+  "debug", "deploy", "deploys", "configure", "setup", "setups", "readme", "docs",
+  "documentation", "up", "off", "out", "over", "via", "ci", "unit", "integration",
+  "regression", "manual", "need", "needs", "should", "would", "could",
+])
+
+const NAME_BY_LETTER: Record<string, string> = {
+  a: "Amy", b: "Barb", c: "Carol", d: "Dave", e: "Erin", f: "Frank", g: "Gary",
+  h: "Helen", i: "Ivan", j: "Janet", k: "Kevin", l: "Linda", m: "Mike",
+  n: "Nancy", o: "Oscar", p: "Pam", q: "Quinn", r: "Rita", s: "Steve",
+  t: "Terry", u: "Uma", v: "Vince", w: "Wendy", x: "Xavier", y: "Yvonne", z: "Zeke",
+}
+
+const NAME_TEMPLATES: Array<(w: string) => string> = [
+  (w) => `${w}-from-IT`,
+  (w) => `VP-of-${w}`,
+  (w) => `${w}-Whisperer`,
+  (w) => `Chief-${w}-Officer`,
+  (w) => `Karen-from-${w}`,
+  (w) => `Intern-in-${w}`,
+  (w) => `The-${w}-Guy`,
+  (w) => `Deborah-of-${w}`,
+  (w) => `Director-of-${w}`,
+  (w) => `${w}-Evangelist`,
+]
+
+const NAME_FALLBACK = ["Kevin-from-IT", "Synergy-Steve", "Circle-Back-Carol", "Per-My-Last-Email-Pam"]
+
+function nameHash(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function funnyWorkerName(task: string, id: number): string {
+  const words = String(task ?? "")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((w) => w.length > 1 && !NAME_STOPWORDS.has(w))
+  const raw = words[0] ?? ""
+  if (!raw) return NAME_FALLBACK[id % NAME_FALLBACK.length]
+  const kw0 = raw[0].toUpperCase() + raw.slice(1)
+  const kw = kw0.length > 12 ? kw0.slice(0, 12) : kw0
+  const seed = nameHash(`${task}|${id}`)
+  const picks = NAME_TEMPLATES.map((t) => t(kw))
+  const allit = NAME_BY_LETTER[kw[0].toLowerCase()]
+  if (allit) picks.push(`${kw}-${allit}`)
+  const name = picks[seed % picks.length]
+  return name.length <= 24 ? name : name.slice(0, 24)
+}
+
 // Proper red for the GIGGA brand — theme-independent (theme().error is
 // pinkish in some themes); matches the agent frontmatter color (#ff3333).
 const GIGGA_RED = RGBA.fromInts(255, 51, 51)
@@ -510,23 +576,29 @@ const tui: TuiPlugin = async (api) => {
           return s.phase === "failed" ? theme().error : s.phase === "done" ? GIGGA_GREEN : GIGGA_RED
         }
 
-        // Two rows per subagent: row 1 = indicator light, type label, and the
-        // live instruments (spinner / ticking clock, or the frozen ✓/✗ m:ss);
-        // row 2 = the concise task title, indented + muted.
+        // Subagent rows: indicator light, label, and the live instruments
+        // (spinner / ticking clock, or the frozen ✓/✗ m:ss). Workers show their
+        // funny office persona name (task-derived, deterministic) instead of a
+        // `worker #n` label; non-worker kinds keep their kind + a muted task
+        // title below. Any row with a live session is clickable — it jumps the
+        // main pane to that subagent's session (same as ctrl+x+down).
         const row = (a: AgentEntry, idx: number, last: boolean) => {
           const conn = last ? "└─" : "├─"
-          const label = a.kind === "worker" ? `worker #${a.id}` : a.kind
+          const isWorker = a.kind === "worker"
+          const label = isWorker ? funnyWorkerName(a.task, a.id) : a.kind
+          const open = () => {
+            if (a.sessionId) api.route.navigate("session", { sessionID: a.sessionId })
+          }
           const title = shortTask(a.task, 30)
           // Tree continuation: non-last rows keep the vertical line so the
           // title row stays visually attached to the tree; the last row's
           // title is plain-indented under the └─.
-          const titleRow = (
-            <Show when={title !== ""}>
+          const titleRow =
+            !isWorker && title !== "" ? (
               <box flexDirection="row" gap={0}>
                 <text fg={theme().textMuted} wrapMode="none">{last ? `     ${title}` : `│    ${title}`}</text>
               </box>
-            </Show>
-          )
+            ) : null
           if (a.status !== "working") {
             const clock = elapsedMs(a)
             const tail =
@@ -534,7 +606,7 @@ const tui: TuiPlugin = async (api) => {
               (a.status === "failed" && (myRun()?.retries ?? 0) > 0 ? " · retry" : "")
             return (
               <box flexDirection="column" gap={0}>
-                <box flexDirection="row" gap={1}>
+                <box flexDirection="row" gap={1} onMouseDown={open}>
                   <text fg={theme().textMuted} wrapMode="none">{conn}</text>
                   <text fg={dotColor(a)} wrapMode="none">●</text>
                   <text fg={theme().textMuted} wrapMode="none">{label}</text>
@@ -558,7 +630,7 @@ const tui: TuiPlugin = async (api) => {
           }
           return (
             <box flexDirection="column" gap={0}>
-              <box flexDirection="row" gap={1}>
+              <box flexDirection="row" gap={1} onMouseDown={open}>
                 <text fg={theme().textMuted} wrapMode="none">{conn}</text>
                 <text fg={red ? GIGGA_RED : dotColor(a)} wrapMode="none">●</text>
                 <text fg={red ? GIGGA_RED : theme().text} wrapMode="none">{label}</text>

@@ -432,6 +432,72 @@ async function setTitle(sessionID: string | null | undefined, title: string): Pr
 
 const shortTask = (s: string, max = 40) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max)
 
+// ---------------------------------------- worker funny-name generator ------
+// Office-satire persona names riffing on a worker's actual task. Deterministic
+// (seeded by task+id) so the name never flickers between the 1s title sweeps
+// and matches plugin/GIGGA-sidebar.tsx. MUST stay in sync with that file.
+const NAME_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "for", "of", "to", "in", "on", "at", "by", "as",
+  "with", "from", "our", "your", "this", "that", "into", "also", "just", "some",
+  "fix", "fixes", "add", "adds", "update", "updates", "change", "changes", "make",
+  "makes", "refactor", "refactors", "implement", "implements", "write", "writes",
+  "create", "creates", "remove", "removes", "delete", "deletes", "use", "uses",
+  "get", "set", "run", "runs", "check", "checks", "ensure", "ensures", "improve",
+  "optimize", "migrate", "test", "tests", "build", "builds", "modify", "rewrite",
+  "handle", "handles", "wire", "wires", "clean", "cleans", "tweak", "tweaks",
+  "debug", "deploy", "deploys", "configure", "setup", "setups", "readme", "docs",
+  "documentation", "up", "off", "out", "over", "via", "ci", "unit", "integration",
+  "regression", "manual", "need", "needs", "should", "would", "could",
+])
+
+const NAME_BY_LETTER: Record<string, string> = {
+  a: "Amy", b: "Barb", c: "Carol", d: "Dave", e: "Erin", f: "Frank", g: "Gary",
+  h: "Helen", i: "Ivan", j: "Janet", k: "Kevin", l: "Linda", m: "Mike",
+  n: "Nancy", o: "Oscar", p: "Pam", q: "Quinn", r: "Rita", s: "Steve",
+  t: "Terry", u: "Uma", v: "Vince", w: "Wendy", x: "Xavier", y: "Yvonne", z: "Zeke",
+}
+
+const NAME_TEMPLATES: Array<(w: string) => string> = [
+  (w) => `${w}-from-IT`,
+  (w) => `VP-of-${w}`,
+  (w) => `${w}-Whisperer`,
+  (w) => `Chief-${w}-Officer`,
+  (w) => `Karen-from-${w}`,
+  (w) => `Intern-in-${w}`,
+  (w) => `The-${w}-Guy`,
+  (w) => `Deborah-of-${w}`,
+  (w) => `Director-of-${w}`,
+  (w) => `${w}-Evangelist`,
+]
+
+const NAME_FALLBACK = ["Kevin-from-IT", "Synergy-Steve", "Circle-Back-Carol", "Per-My-Last-Email-Pam"]
+
+function nameHash(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function funnyWorkerName(task: string, id: number): string {
+  const words = String(task ?? "")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((w) => w.length > 1 && !NAME_STOPWORDS.has(w))
+  const raw = words[0] ?? ""
+  if (!raw) return NAME_FALLBACK[id % NAME_FALLBACK.length]
+  const kw0 = raw[0].toUpperCase() + raw.slice(1)
+  const kw = kw0.length > 12 ? kw0.slice(0, 12) : kw0
+  const seed = nameHash(`${task}|${id}`)
+  const picks = NAME_TEMPLATES.map((t) => t(kw))
+  const allit = NAME_BY_LETTER[kw[0].toLowerCase()]
+  if (allit) picks.push(`${kw}-${allit}`)
+  const name = picks[seed % picks.length]
+  return name.length <= 24 ? name : name.slice(0, 24)
+}
+
 // ------------------------------------------------ TUI sidebar tree render --
 // The TUI sidebar cannot render widgets, but every session row's TITLE is
 // live-updatable. GIGGA renders an animated tree (pure-title format):
@@ -532,7 +598,7 @@ function childTitle(s: RunState, a: AgentEntry, idx: number, isLast: boolean, fi
   // and a `#n` suffix to mark the prompt boundary.
   const conn = firstOfPrompt && promptIdx > 0 ? "┌─" : isLast ? "└─" : "├─"
   const sep = firstOfPrompt && promptIdx > 0 ? ` #${promptIdx}` : ""
-  const name = a.kind === "worker" ? `#${a.id} ${shortTask(a.task, 22)}` : `${a.kind} ${shortTask(a.task, 18)}`
+  const name = a.kind === "worker" ? `#${a.id} ${funnyWorkerName(a.task, a.id)}` : `${a.kind} ${shortTask(a.task, 18)}`
   if (a.status !== "working") {
     const clock = elapsedMs(a)
     return `${conn} ${dotOf(a)} ${name} ${a.status === "done" ? "✓" : "✗"}${clock != null ? ` ${fmtClock(clock)}` : ""}${a.status === "failed" && s.retries > 0 ? " · retry" : ""}${sep}`
