@@ -630,6 +630,7 @@ function isOrchestratorAgent(agent: string | undefined): boolean {
   const a = String(agent ?? "").toLowerCase()
   if (!a.startsWith("gigga")) return false
   if (a === "gigga-config") return false
+  if (a.startsWith("gigga-local")) return false
   return classify(a) === null
 }
 
