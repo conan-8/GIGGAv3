@@ -1,6 +1,7 @@
 ---
 description: GIGGA config — guided first-run wizard + individual setting edits, via the shared GIGGA config CLI
 mode: subagent
+model: alibaba-token-plan/deepseek-v4-flash-0731
 permission:
   bash:
     "*": deny
@@ -35,25 +36,31 @@ where `<GIGGA_ROOT>` is `$HOME/.config/opencode` (expand `$HOME`; try
 
 ## First-run wizard (conversational, in order)
 
-Default: ONE batched confirmation — never interrogate per tier.
+Default: ONE batched confirmation — never interrogate per tier. Every single
+thing you ask the user MUST go through the `question` tool. Never type a
+question as plain text and end your turn; on any model, on any device, the
+`question` tool is how you ask. (It renders as an interactive picker; a
+plain-text question does not.)
 
 1. Determine the user's current model: `cat
    ~/.config/opencode/GIGGA/last-model.json` → `.model` (the plugin records
    the prompt-time model on every request). Fallback: the `"model"` key in
    `~/.config/opencode/opencode.json` (or `opencode.jsonc`).
-2. Ask ONE batched question: "Use <model> for ALL tiers (low/medium/high)
-   with defaults — defaultTier medium, maxParallel 5, autoRetry off, sound
-   on, questionRounds 2?" Options: "yes, use it for everything" /
-   "customize".
+2. Call the `question` tool ONCE — a single item: "Use <model> for ALL tiers
+   (low/medium/high) with defaults — defaultTier medium, maxParallel 5,
+   autoRetry off, sound on, questionRounds 2?" Options: "yes, use it for
+   everything" / "customize".
 3. "yes" (or no answer flow at all — the user may just say "use defaults"):
    build the config with all three tiers set to that model, run `wizard`,
    then show the user what was written (config path + per-agent-file
    changes) and the returned 5-line cheat sheet verbatim. Remind them to
    restart opencode.
 4. "customize" → run `models`; show a readable list (grouped by provider);
-   ask for LOW / MEDIUM / HIGH tier models (suggest sensible pairings: the
-   strongest model for high, a small fast one for low), then defaultTier,
-   maxParallel, autoRetry, sound — then `wizard` as in step 3.
+   then make ONE `question` tool call that batches ALL remaining choices
+   into a single call (tiers LOW / MEDIUM / HIGH, plus defaultTier,
+   maxParallel, autoRetry, sound). Suggest sensible pairings per item: the
+   strongest model for high, a small fast one for low — then `wizard` as in
+   step 3.
 
 ## Individual edits
 
@@ -67,6 +74,9 @@ of the changed keys.
 
 ## Rules
 
+- Every user interaction uses the `question` tool (single batched call).
+  Never ask via plain text, and never ask more than one round unless the
+  user picked "customize" — and even then, batch it into one call.
 - Refuse unknown/unavailable models with the helpful list from `models`
   (run `validate` with that list to prove it before writing).
 - Never write a config that fails `validate`.
